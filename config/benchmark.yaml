@@ -1,0 +1,11 @@
+benchmark_name: Niera Benchmark
+benchmark_version: v1
+save_raw_output: true
+
+evaluation:
+  exact_answer: true
+  intent: true
+  behavior: true
+  scientific: true
+  educational: true
+  renderability: false
