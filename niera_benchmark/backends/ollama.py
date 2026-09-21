@@ -48,5 +48,8 @@ class OllamaBackend(ModelBackend):
                 "backend": "ollama",
                 "total_duration_ns": data.get("total_duration"),
                 "load_duration_ns": data.get("load_duration"),
+                "prompt_eval_duration_ns": data.get("prompt_eval_duration"),
+                "eval_duration_ns": data.get("eval_duration"),
+                "done_reason": data.get("done_reason"),
             },
         )

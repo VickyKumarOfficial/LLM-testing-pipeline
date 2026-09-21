@@ -10,6 +10,7 @@ from niera_benchmark.evaluators import basic_evaluation
 from niera_benchmark.io import read_jsonl, write_json
 from niera_benchmark.models import GenerationConfig
 from niera_benchmark.profile import load_profile, render_system_prompt
+from niera_benchmark.stats import format_summary, summarize
 
 ROOT = Path(__file__).resolve().parent
 
@@ -83,6 +84,7 @@ def main():
     print()
 
     results_path = run_dir / "results.jsonl"
+    results = []
     ok_count = 0
     error_count = 0
 
@@ -132,8 +134,11 @@ def main():
                 error_count += 1
                 print(f"ERROR: {exc}")
 
+            results.append(result)
             sink.write(json.dumps(result, ensure_ascii=False) + "\n")
             sink.flush()
+
+    stats = summarize(results)
 
     write_json(run_dir / "run.json", {
         "run_id": run_id,
@@ -149,11 +154,26 @@ def main():
         "test_count": len(tests),
         "ok_count": ok_count,
         "error_count": error_count,
+        "stats": stats,
         "started_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
     })
 
+    # Standalone performance artifacts, so a run's speed profile can be read
+    # or diffed without re-parsing results.jsonl.
+    summary_text = format_summary(args.model, stats)
+    write_json(run_dir / "performance.json", {
+        "run_id": run_id,
+        "model": args.model,
+        "backend": args.backend,
+        "dataset": dataset_path.name,
+        "profile_id": profile.get("profile_id"),
+        "generation_config": config.__dict__,
+        "stats": stats,
+    })
+    (run_dir / "performance.txt").write_text(summary_text + "\n", encoding="utf-8")
+
+    print(summary_text)
     print()
-    print(f"Completed: {ok_count} ok, {error_count} errors")
     print(f"Saved results to: {run_dir}")
 
 if __name__ == "__main__":
