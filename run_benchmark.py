@@ -1,12 +1,15 @@
 import argparse
 import datetime as dt
+import hashlib
+import json
 import uuid
 from pathlib import Path
 
 from niera_benchmark.backends.ollama import OllamaBackend
 from niera_benchmark.evaluators import basic_evaluation
-from niera_benchmark.io import read_jsonl, write_json, write_jsonl
+from niera_benchmark.io import read_jsonl, write_json
 from niera_benchmark.models import GenerationConfig
+from niera_benchmark.profile import load_profile, render_system_prompt
 
 ROOT = Path(__file__).resolve().parent
 
@@ -28,16 +31,24 @@ def load_generation_config(path: Path) -> GenerationConfig:
                 values[key] = value
     return GenerationConfig(**values)
 
+def test_identifier(test: dict) -> str:
+    # The smoke set uses "id"; the sourced v1 set uses "test_id".
+    return test.get("test_id") or test.get("id") or "UNKNOWN-ID"
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--backend", choices=["ollama"], default="ollama")
     parser.add_argument("--dataset", default="datasets/smoke.jsonl")
+    parser.add_argument("--profile", default="config/student_profile.json")
     parser.add_argument("--ollama-host", default="http://localhost:11434")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Run only the first N tests (for quick checks).")
     args = parser.parse_args()
 
     config = load_generation_config(ROOT / "config/generation.yaml")
     dataset_path = ROOT / args.dataset
+    profile_path = ROOT / args.profile
 
     if args.backend == "ollama":
         backend = OllamaBackend(args.model, args.ollama_host)
@@ -46,67 +57,103 @@ def main():
     run_dir = ROOT / "results" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    system_prompt = (ROOT / "prompts/system.txt").read_text(encoding="utf-8")
+    profile = load_profile(profile_path)
+    system_template = (ROOT / "prompts/system.txt").read_text(encoding="utf-8")
+    system_prompt = render_system_prompt(system_template, profile)
     user_template = (ROOT / "prompts/user_template.txt").read_text(encoding="utf-8")
 
+    # Snapshot the exact prompt and profile used, so a run stays reproducible
+    # even after the prompt files are edited.
+    (run_dir / "system_prompt.rendered.txt").write_text(system_prompt, encoding="utf-8")
+    write_json(run_dir / "student_profile.json", profile)
+    prompt_hash = hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()[:16]
+
     tests = list(read_jsonl(dataset_path))
-    results = []
+    if args.limit:
+        tests = tests[:args.limit]
 
     print("Niera Benchmark v1")
-    print(f"Model: {args.model}")
+    print(f"Model:   {args.model}")
     print(f"Backend: {args.backend}")
-    print(f"Tests: {len(tests)}")
+    print(f"Dataset: {dataset_path.name}")
+    print(f"Profile: {profile.get('profile_id', profile_path.name)}")
+    print(f"Prompt:  sha256:{prompt_hash} ({len(system_prompt)} chars)")
+    print(f"Tests:   {len(tests)}")
+    print(f"Run dir: {run_dir}")
     print()
 
-    for index, test in enumerate(tests, start=1):
-        user_prompt = user_template.replace("{{question}}", test["question"])
-        print(f"[{index}/{len(tests)}] {test['id']} ...", end=" ", flush=True)
+    results_path = run_dir / "results.jsonl"
+    ok_count = 0
+    error_count = 0
 
-        try:
-            response = backend.generate(system_prompt, user_prompt, config)
-            result = {
+    # Write incrementally: a failure partway through must not discard the
+    # responses already collected.
+    with open(results_path, "w", encoding="utf-8") as sink:
+        for index, test in enumerate(tests, start=1):
+            test_id = test_identifier(test)
+            user_prompt = user_template.replace("{{question}}", test["question"])
+            print(f"[{index}/{len(tests)}] {test_id} ...", end=" ", flush=True)
+
+            base = {
                 "run_id": run_id,
                 "benchmark": "Niera Benchmark",
                 "benchmark_version": "v1",
+                "mode": "A_base_model",
                 "model": args.model,
                 "backend": args.backend,
+                "test_id": test_id,
                 "test": test,
-                "generation": {
-                    "latency_ms": response.latency_ms,
-                    "input_tokens": response.input_tokens,
-                    "output_tokens": response.output_tokens,
-                    "config": config.__dict__,
+                "prompt": {
+                    "system_prompt_sha256": prompt_hash,
+                    "profile_id": profile.get("profile_id"),
+                    "user_prompt": user_prompt,
                 },
-                "output": response.text,
-                "evaluation": basic_evaluation(test, response.text),
-                "metadata": response.metadata,
             }
-            print("OK")
-        except Exception as exc:
-            result = {
-                "run_id": run_id,
-                "benchmark": "Niera Benchmark",
-                "benchmark_version": "v1",
-                "model": args.model,
-                "backend": args.backend,
-                "test": test,
-                "error": {"type": type(exc).__name__, "message": str(exc)},
-            }
-            print(f"ERROR: {exc}")
 
-        results.append(result)
+            try:
+                response = backend.generate(system_prompt, user_prompt, config)
+                result = {
+                    **base,
+                    "generation": {
+                        "latency_ms": response.latency_ms,
+                        "input_tokens": response.input_tokens,
+                        "output_tokens": response.output_tokens,
+                        "config": config.__dict__,
+                    },
+                    "output": response.text,
+                    "evaluation": basic_evaluation(test, response.text),
+                    "metadata": response.metadata,
+                }
+                ok_count += 1
+                secs = (response.latency_ms or 0) / 1000
+                print(f"OK ({secs:.1f}s)")
+            except Exception as exc:
+                result = {**base, "error": {"type": type(exc).__name__, "message": str(exc)}}
+                error_count += 1
+                print(f"ERROR: {exc}")
 
-    write_jsonl(run_dir / "results.jsonl", results)
+            sink.write(json.dumps(result, ensure_ascii=False) + "\n")
+            sink.flush()
+
     write_json(run_dir / "run.json", {
         "run_id": run_id,
+        "benchmark_version": "v1",
+        "mode": "A_base_model",
         "model": args.model,
         "backend": args.backend,
         "dataset": str(dataset_path),
+        "profile_id": profile.get("profile_id"),
+        "profile_path": str(profile_path),
+        "system_prompt_sha256": prompt_hash,
         "generation_config": config.__dict__,
         "test_count": len(tests),
+        "ok_count": ok_count,
+        "error_count": error_count,
+        "started_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
     })
 
     print()
+    print(f"Completed: {ok_count} ok, {error_count} errors")
     print(f"Saved results to: {run_dir}")
 
 if __name__ == "__main__":
