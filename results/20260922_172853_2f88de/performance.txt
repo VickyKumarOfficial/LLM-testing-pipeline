@@ -1,0 +1,22 @@
+
+==========================================================
+ SPEED & OUTPUT PROFILE - gemma3:12b
+==========================================================
+ Completed          56/56  (0 errors)
+ Total generation   52.5 min
+
+ Latency/question   median 63.4s   p95 68.5s   max 69.6s
+ Decode speed       median 9.5 tok/s   min 9.1
+ Output length      median 580 tok   max 631 tok
+ Prompt size        median 3478 tok
+
+ Median latency / output length by group:
+   difficulty=Fundamental       n=8   42.4s   391 tok
+   difficulty=Hard              n=14  61.8s   564 tok
+   difficulty=Moderate          n=19  65.9s   586 tok
+   difficulty=Moderate-Hard     n=15  63.1s   591 tok
+   track=Adversarial            n=16  51.0s   488 tok
+   track=JEE                    n=15  65.9s   604 tok
+   track=NCERT                  n=20  66.9s   593 tok
+   track=NEET                   n=5   38.8s   361 tok
+==========================================================
