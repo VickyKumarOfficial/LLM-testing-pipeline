@@ -1,0 +1,23 @@
+
+==========================================================
+ SPEED & OUTPUT PROFILE - llama3.1:8b
+==========================================================
+ Completed          56/56  (0 errors)
+ Total generation   72.3 min
+
+ Latency/question   median 34.7s   p95 277.8s   max 736.1s
+ Decode speed       median 11.7 tok/s   min 10.1
+ Output length      median 378 tok   max 8192 tok
+ Prompt size        median 3276 tok
+ ! TRUNCATED        3 answers hit max_tokens: MATH-NC-05, MATH-JEE-01, MATH-JEE-03
+
+ Median latency / output length by group:
+   difficulty=Fundamental       n=8   30.5s   248 tok
+   difficulty=Hard              n=14  31.9s   363 tok
+   difficulty=Moderate          n=19  35.9s   380 tok
+   difficulty=Moderate-Hard     n=15  38.8s   436 tok
+   track=Adversarial            n=16  26.1s   291 tok
+   track=JEE                    n=15  66.2s   487 tok
+   track=NCERT                  n=20  34.9s   409 tok
+   track=NEET                   n=5   24.5s   279 tok
+==========================================================
