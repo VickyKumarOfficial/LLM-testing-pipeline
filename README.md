@@ -110,6 +110,19 @@ Each run writes to `results/<run_id>/`:
 Results are flushed after every question, so an interrupted run keeps the
 responses it already collected.
 
+## Backing up a run
+
+Run output is tracked by git (`results/` is not ignored), but committing is
+manual. A full run costs 1-2 hours of generation, so save it as soon as it
+finishes:
+
+    scripts/save_run.sh              # commit + push the newest run
+    scripts/save_run.sh <run_id>     # commit + push a specific run
+
+The script refuses to save a run with no `results.jsonl`, and pushes to
+`origin` so the responses exist off-machine. Runs left uncommitted are not
+recoverable if the directory is removed.
+
 ## Prompt architecture
 
     prompts/system.txt          stable Niera teaching behaviour + {{placeholders}}
