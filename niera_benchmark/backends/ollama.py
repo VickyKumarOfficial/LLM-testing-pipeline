@@ -38,9 +38,15 @@ class OllamaBackend(ModelBackend):
         data = response.json()
 
         message = data.get("message", {})
+        # Hybrid reasoning models (qwen3, deepseek-r1, ...) return their chain of
+        # thought in a separate "thinking" field. It is captured rather than
+        # discarded: eval_count covers thinking + answer, so without it an empty
+        # content field is indistinguishable from a model that said nothing.
+        thinking = message.get("thinking") or ""
+        content = message.get("content", "") or ""
         return ModelResponse(
             model=self.model,
-            text=message.get("content", ""),
+            text=content,
             input_tokens=data.get("prompt_eval_count"),
             output_tokens=data.get("eval_count"),
             latency_ms=latency_ms,
@@ -51,5 +57,9 @@ class OllamaBackend(ModelBackend):
                 "prompt_eval_duration_ns": data.get("prompt_eval_duration"),
                 "eval_duration_ns": data.get("eval_duration"),
                 "done_reason": data.get("done_reason"),
+                "thinking": thinking,
+                "thinking_chars": len(thinking),
+                "has_thinking": bool(thinking.strip()),
+                "answer_chars": len(content),
             },
         )

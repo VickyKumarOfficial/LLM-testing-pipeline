@@ -35,7 +35,8 @@ def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     errors = [r for r in rows if "error" in r]
 
     latencies, out_tokens, in_tokens, tps, lengths = [], [], [], [], []
-    truncated, empty = [], []
+    truncated, empty, thinking_only = [], [], []
+    reasoning_runs = 0
     by_group = defaultdict(lambda: {"latency": [], "out_tokens": []})
 
     for r in ok:
@@ -64,8 +65,14 @@ def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             tps.append(ot / (lat / 1000))
 
         lengths.append(len(text))
+        if meta.get("has_thinking"):
+            reasoning_runs += 1
         if not text.strip():
             empty.append(r.get("test_id"))
+            # Empty answer but the model did think: the token budget ran out
+            # before it began writing. A harness problem, not a refusal.
+            if meta.get("has_thinking"):
+                thinking_only.append(r.get("test_id"))
         # max_tokens reached: the answer was cut off mid-thought.
         if ot and ot >= gen.get("config", {}).get("max_tokens", 10**9):
             truncated.append(r.get("test_id"))
@@ -103,6 +110,8 @@ def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "response_chars": _num([float(x) for x in lengths]),
         "truncated_at_max_tokens": truncated,
         "empty_responses": empty,
+        "thinking_only_no_answer": thinking_only,
+        "reasoning_model_responses": reasoning_runs,
         "by_group": groups,
     }
 
@@ -133,6 +142,16 @@ def format_summary(model: str, s: Dict[str, Any]) -> str:
         )
     if s["empty_responses"]:
         lines.append(f" ! EMPTY            {', '.join(s['empty_responses'][:5])}")
+    if s.get("thinking_only_no_answer"):
+        lines.append(
+            f" ! THOUGHT, NO ANSWER  {len(s['thinking_only_no_answer'])} ran out of"
+            " budget mid-reasoning - raise max_tokens"
+        )
+    if s.get("reasoning_model_responses"):
+        lines.append(
+            f" i Reasoning model     {s['reasoning_model_responses']}/{s['ok']}"
+            " responses included a thinking block"
+        )
     if s["error_ids"]:
         lines.append(f" ! ERRORS           {', '.join(s['error_ids'][:5])}")
 
