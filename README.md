@@ -35,21 +35,85 @@ Create the Python environment:
 
 ## Running
 
-Start Ollama in a separate terminal:
+All three candidate models run through the same code path with the same
+generation config. Only `--model` changes - that is what makes the comparison
+valid. Never change `config/generation.yaml` for one model only.
+
+Start Ollama in a separate terminal and leave it running:
 
     ollama serve
 
-Smoke check (3 questions):
+Activate the environment in your working terminal:
 
-    python run_benchmark.py --model qwen3:8b --dataset datasets/smoke.jsonl
+    source .venv/bin/activate
 
-Full benchmark (56 questions, roughly 25-35 min on an 8B model):
+### Candidate models
+
+| # | Model            | Size   | Reasoning | Expected full-run time |
+|---|------------------|--------|-----------|------------------------|
+| 1 | `qwen3:8b`       | 5.2 GB | yes       | ~2 h                   |
+| 2 | `llama3.1:8b`    | ~4.9 GB| no        | ~40-60 min             |
+| 3 | `gemma3:12b`     | ~8.1 GB| no        | ~1.5-2 h               |
+
+Run them one at a time. 16 GB of unified memory cannot hold two of these at
+once, and `gemma3:12b` uses most of it on its own.
+
+### Model 1 - qwen3:8b
+
+Already pulled.
+
+    python run_benchmark.py --model qwen3:8b --dataset datasets/smoke.jsonl --limit 1
 
     python run_benchmark.py \
       --model qwen3:8b \
       --dataset datasets/niera_legitimate_questions_verified_v1.jsonl
 
-Useful flags:
+    scripts/save_run.sh
+
+### Model 2 - llama3.1:8b
+
+    ollama pull llama3.1:8b
+
+    python run_benchmark.py --model llama3.1:8b --dataset datasets/smoke.jsonl --limit 1
+
+    python run_benchmark.py \
+      --model llama3.1:8b \
+      --dataset datasets/niera_legitimate_questions_verified_v1.jsonl
+
+    scripts/save_run.sh
+
+### Model 3 - gemma3:12b
+
+    ollama pull gemma3:12b
+
+    python run_benchmark.py --model gemma3:12b --dataset datasets/smoke.jsonl --limit 1
+
+    python run_benchmark.py \
+      --model gemma3:12b \
+      --dataset datasets/niera_legitimate_questions_verified_v1.jsonl
+
+    scripts/save_run.sh
+
+This machine is a fanless MacBook Air. On a run this long, watch whether
+per-question latency drifts upward from test 1 to test 56 - that is thermal
+throttling, not the model being slow. `performance.json` holds the per-question
+data needed to check it.
+
+### After all three
+
+    python scripts/report.py results/<qwen3_run> results/<llama_run> results/<gemma_run>
+
+### Always do this
+
+1. Run the `--limit 1` smoke first. It confirms the run writes cleanly in about
+   a minute rather than failing two hours in.
+2. Run `scripts/save_run.sh` the moment a run finishes. An uncommitted run is
+   not recoverable if the directory is removed.
+3. Check the printed profile for `! TRUNCATED` and `! THOUGHT, NO ANSWER`.
+   Both should be empty at `max_tokens: 8192`. If either fires, raise the
+   ceiling for *all* models and re-run *all* of them.
+
+### Useful flags
 
     --limit 5              run only the first N tests
     --profile <path>       use a different student profile
