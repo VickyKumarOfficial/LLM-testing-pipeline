@@ -1,0 +1,149 @@
+{
+  "run_id": "20260922_104435_c7a061",
+  "benchmark_version": "v1",
+  "mode": "A_base_model",
+  "model": "qwen3:8b",
+  "backend": "ollama",
+  "dataset": "/Users/lucky/Downloads/VICKY/niera/llm_testing/datasets/niera_legitimate_questions_verified_v1.jsonl",
+  "profile_id": "JEE-2026-ARJUN-01",
+  "profile_path": "/Users/lucky/Downloads/VICKY/niera/llm_testing/config/student_profile.json",
+  "system_prompt_sha256": "b25fa2df07760b5d",
+  "generation_config": {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "max_tokens": 8192,
+    "seed": 42
+  },
+  "test_count": 56,
+  "ok_count": 56,
+  "error_count": 0,
+  "stats": {
+    "tests": 56,
+    "ok": 56,
+    "errors": 0,
+    "error_ids": [],
+    "wall_clock_s": 10616.0,
+    "latency_ms": {
+      "n": 56,
+      "mean": 189571.9,
+      "median": 111587.7,
+      "p95": 648825.3,
+      "min": 37391.9,
+      "max": 767016.9
+    },
+    "output_tokens": {
+      "n": 55,
+      "mean": 1969.5,
+      "median": 965.0,
+      "p95": 8192.0,
+      "min": 264.0,
+      "max": 8192.0
+    },
+    "input_tokens": {
+      "n": 55,
+      "mean": 3321.9,
+      "median": 3318.0,
+      "p95": 3350.3,
+      "min": 3296.0,
+      "max": 3363.0
+    },
+    "tokens_per_sec": {
+      "n": 55,
+      "mean": 12.2,
+      "median": 12.4,
+      "p95": 13.4,
+      "min": 10.0,
+      "max": 17.2
+    },
+    "response_chars": {
+      "n": 56,
+      "mean": 1287.6,
+      "median": 1284.5,
+      "p95": 2397.2,
+      "min": 0.0,
+      "max": 3124.0
+    },
+    "truncated_at_max_tokens": [
+      "PHY-NC-03",
+      "MATH-JEE-02",
+      "MATH-JEE-03",
+      "CHEM-JEE-03"
+    ],
+    "empty_responses": [
+      "PHY-NC-03",
+      "MATH-JEE-02",
+      "PHY-JEE-03",
+      "CHEM-JEE-03"
+    ],
+    "thinking_only_no_answer": [
+      "PHY-NC-03",
+      "MATH-JEE-02",
+      "PHY-JEE-03",
+      "CHEM-JEE-03"
+    ],
+    "reasoning_model_responses": 56,
+    "by_group": {
+      "difficulty=Fundamental": {
+        "n": 8,
+        "median_latency_s": 92.7,
+        "median_out_tokens": 744
+      },
+      "difficulty=Hard": {
+        "n": 14,
+        "median_latency_s": 117.9,
+        "median_out_tokens": 906
+      },
+      "difficulty=Moderate": {
+        "n": 19,
+        "median_latency_s": 117.9,
+        "median_out_tokens": 1256
+      },
+      "difficulty=Moderate-Hard": {
+        "n": 15,
+        "median_latency_s": 108.7,
+        "median_out_tokens": 929
+      },
+      "subject=Biology": {
+        "n": 14,
+        "median_latency_s": 83.3,
+        "median_out_tokens": 767
+      },
+      "subject=Chemistry": {
+        "n": 14,
+        "median_latency_s": 98.5,
+        "median_out_tokens": 901
+      },
+      "subject=Mathematics": {
+        "n": 14,
+        "median_latency_s": 160.8,
+        "median_out_tokens": 1400
+      },
+      "subject=Physics": {
+        "n": 14,
+        "median_latency_s": 169.8,
+        "median_out_tokens": 1176
+      },
+      "track=Adversarial": {
+        "n": 16,
+        "median_latency_s": 82.5,
+        "median_out_tokens": 748
+      },
+      "track=JEE": {
+        "n": 15,
+        "median_latency_s": 349.3,
+        "median_out_tokens": 3780
+      },
+      "track=NCERT": {
+        "n": 20,
+        "median_latency_s": 102.1,
+        "median_out_tokens": 989
+      },
+      "track=NEET": {
+        "n": 5,
+        "median_latency_s": 89.5,
+        "median_out_tokens": 669
+      }
+    }
+  },
+  "started_utc": "2026-09-22T08:11:31.597703+00:00"
+}

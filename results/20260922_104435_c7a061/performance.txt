@@ -1,0 +1,26 @@
+
+==========================================================
+ SPEED & OUTPUT PROFILE - qwen3:8b
+==========================================================
+ Completed          56/56  (0 errors)
+ Total generation   176.9 min
+
+ Latency/question   median 111.6s   p95 648.8s   max 767.0s
+ Decode speed       median 12.4 tok/s   min 10.0
+ Output length      median 965 tok   max 8192 tok
+ Prompt size        median 3318 tok
+ ! TRUNCATED        4 answers hit max_tokens: PHY-NC-03, MATH-JEE-02, MATH-JEE-03, CHEM-JEE-03
+ ! EMPTY            PHY-NC-03, MATH-JEE-02, PHY-JEE-03, CHEM-JEE-03
+ ! THOUGHT, NO ANSWER  4 ran out of budget mid-reasoning - raise max_tokens
+ i Reasoning model     56/56 responses included a thinking block
+
+ Median latency / output length by group:
+   difficulty=Fundamental       n=8   92.7s   744 tok
+   difficulty=Hard              n=14  117.9s   906 tok
+   difficulty=Moderate          n=19  117.9s   1256 tok
+   difficulty=Moderate-Hard     n=15  108.7s   929 tok
+   track=Adversarial            n=16  82.5s   748 tok
+   track=JEE                    n=15  349.3s   3780 tok
+   track=NCERT                  n=20  102.1s   989 tok
+   track=NEET                   n=5   89.5s   669 tok
+==========================================================
