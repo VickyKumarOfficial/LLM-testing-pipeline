@@ -7,6 +7,9 @@ from typing import Any
 
 from niera_api.shares import connect
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+PARAM = "%s" if DATABASE_URL else "?"
+
 
 def ensure_catalog_table() -> None:
     conn = connect()
@@ -88,5 +91,51 @@ def mark_failed(run_id: str) -> None:
             (run_id,),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_published_run(run_id: str) -> dict[str, Any] | None:
+    ensure_catalog_table()
+    conn = connect()
+    try:
+        row = conn.execute(
+            f"SELECT * FROM published_runs WHERE run_id = {PARAM} AND status = 'published'",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "run_id": row["run_id"],
+            "manifest": json.loads(row["manifest_json"]),
+            "blob_path": row["blob_path"],
+            "artifact_names": json.loads(row["artifact_names_json"]),
+            "archive_sha256": row["archive_sha256"],
+            "status": row["status"],
+            "published_at": row["published_at"],
+        }
+    finally:
+        conn.close()
+
+
+def list_published_runs() -> list[dict[str, Any]]:
+    ensure_catalog_table()
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM published_runs WHERE status = 'published' ORDER BY published_at DESC"
+        ).fetchall()
+        return [
+            {
+                "run_id": row["run_id"],
+                "manifest": json.loads(row["manifest_json"]),
+                "blob_path": row["blob_path"],
+                "artifact_names": json.loads(row["artifact_names_json"]),
+                "archive_sha256": row["archive_sha256"],
+                "status": row["status"],
+                "published_at": row["published_at"],
+            }
+            for row in rows
+        ]
     finally:
         conn.close()

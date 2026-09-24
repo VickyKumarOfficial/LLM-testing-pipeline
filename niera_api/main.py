@@ -3,26 +3,42 @@
 import hmac
 import json
 import os
-import re
 import time
+import io
 from pathlib import Path
-from typing import Any
+import zipfile
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from niera_api import shares
-
-
-ROOT = Path(__file__).resolve().parent.parent
-RESULTS_DIR = ROOT / "results"
-RUN_ID_RE = re.compile(r"^[0-9]{8}_[0-9]{6}_[a-f0-9]{6}$")
+from niera_api import artifacts, shares
 
 app = FastAPI(
     title="Niera benchmark API",
     version="1.0.0",
     description="Read-only access to saved Niera benchmark runs.",
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def reviewer_page() -> HTMLResponse:
+    page = Path(__file__).resolve().parent / "static" / "index.html"
+    try:
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    except OSError:
+        raise HTTPException(status_code=404, detail="Reviewer page is unavailable") from None
 
 
 def require_api_token(authorization: str | None = Header(default=None)) -> None:
@@ -62,27 +78,10 @@ class CreateShareRequest(BaseModel):
     allow_profile: bool = False
 
 
-def run_directory(run_id: str) -> Path:
-    if not RUN_ID_RE.fullmatch(run_id):
-        raise HTTPException(status_code=404, detail="Run not found")
-    path = RESULTS_DIR / run_id
-    # Resolve and re-check containment so an unexpected symlink cannot escape
-    # the results directory.
-    try:
-        resolved = path.resolve(strict=True)
-        resolved.relative_to(RESULTS_DIR.resolve(strict=True))
-    except (FileNotFoundError, ValueError):
-        raise HTTPException(status_code=404, detail="Run not found") from None
-    if not resolved.is_dir() or not (resolved / "run.json").is_file():
-        raise HTTPException(status_code=404, detail="Run not found")
-    return resolved
-
-
-def read_manifest(path: Path) -> dict[str, Any]:
-    try:
-        return json.loads((path / "run.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        raise HTTPException(status_code=500, detail="Run manifest is unreadable") from None
+class ComparisonRequest(BaseModel):
+    run_ids: list[str] = Field(min_length=2, max_length=4)
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=10, ge=1, le=20)
 
 
 def safe_run_summary(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -103,26 +102,6 @@ def safe_run_summary(manifest: dict[str, Any]) -> dict[str, Any]:
         "started_utc",
     )
     return {key: manifest[key] for key in allowed if key in manifest}
-
-
-def read_results(path: Path) -> list[dict[str, Any]]:
-    results_path = path / "results.jsonl"
-    if not results_path.is_file():
-        raise HTTPException(status_code=404, detail="Run results not found")
-    rows: list[dict[str, Any]] = []
-    try:
-        with results_path.open(encoding="utf-8") as source:
-            for line_number, line in enumerate(source, start=1):
-                if line.strip():
-                    row = json.loads(line)
-                    if not isinstance(row, dict):
-                        raise ValueError("result row is not an object")
-                    rows.append(row)
-    except (OSError, json.JSONDecodeError, ValueError):
-        raise HTTPException(
-            status_code=500, detail="Run results are unreadable"
-        ) from None
-    return rows
 
 
 def public_result(row: dict[str, Any]) -> dict[str, Any]:
@@ -162,6 +141,98 @@ def public_result(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def compare_runs(run_ids: list[str], offset: int, limit: int) -> dict[str, Any]:
+    if len(set(run_ids)) != len(run_ids):
+        raise HTTPException(status_code=422, detail="run_ids must not contain duplicates")
+    manifests = {run_id: artifacts.get_manifest(run_id) for run_id in run_ids}
+    normalized = {}
+    for run_id, manifest in manifests.items():
+        dataset = str(manifest.get("dataset", "")).replace("\\", "/").rsplit("/", 1)[-1]
+        normalized[run_id] = {
+            "benchmark_version": manifest.get("benchmark_version"),
+            "dataset": dataset,
+            "system_prompt_sha256": manifest.get("system_prompt_sha256"),
+            "profile_id": manifest.get("profile_id"),
+            "generation_config": manifest.get("generation_config"),
+        }
+    reference = normalized[run_ids[0]]
+    mismatches = [
+        field for field in reference
+        if any(normalized[run_id].get(field) != reference.get(field) for run_id in run_ids[1:])
+    ]
+
+    result_maps = {}
+    order = []
+    for run_id in run_ids:
+        rows = artifacts.get_results(run_id)
+        result_maps[run_id] = {row.get("test_id"): row for row in rows if row.get("test_id")}
+        for row in rows:
+            test_id = row.get("test_id")
+            if test_id and test_id not in order:
+                order.append(test_id)
+
+    aligned = []
+    for test_id in order:
+        present = [result_maps[run_id].get(test_id) for run_id in run_ids]
+        first = next((row for row in present if row is not None), None)
+        aligned.append({
+            "test_id": test_id,
+            "question": ((first or {}).get("test") or {}).get("question"),
+            "runs": [
+                None if row is None else {
+                    "run_id": run_id,
+                    "model": row.get("model"),
+                    "output": row.get("output"),
+                    "generation": row.get("generation", {}),
+                    "error": {"type": row["error"].get("type", "Error")}
+                    if isinstance(row.get("error"), dict) else None,
+                }
+                for run_id, row in zip(run_ids, present)
+            ],
+        })
+    return {
+        "run_ids": run_ids,
+        "comparable": not mismatches,
+        "comparison_mismatches": mismatches,
+        "comparison_settings": normalized,
+        "offset": offset,
+        "limit": limit,
+        "total_tests": len(aligned),
+        "tests": aligned[offset : offset + limit],
+    }
+
+
+def make_export(run_id: str, include_prompt: bool, include_profile: bool) -> bytes:
+    manifest = safe_run_summary(artifacts.get_manifest(run_id))
+    bundle = artifacts.get_run_bundle(run_id)
+    try:
+        raw_rows = [
+            json.loads(line)
+            for line in bundle["results.jsonl"].decode("utf-8").splitlines()
+            if line.strip()
+        ]
+    except (KeyError, UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=500, detail="Run results are unreadable") from None
+    rows = [public_result(row) for row in raw_rows]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("run.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        archive.writestr(
+            "results.jsonl",
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+        )
+        for name in ("performance.json", "performance.txt"):
+            if name in bundle:
+                archive.writestr(name, bundle[name])
+        if include_prompt:
+            if "system_prompt.rendered.txt" in bundle:
+                archive.writestr("system_prompt.rendered.txt", bundle["system_prompt.rendered.txt"])
+        if include_profile:
+            if "student_profile.json" in bundle:
+                archive.writestr("student_profile.json", bundle["student_profile.json"])
+    return buffer.getvalue()
+
+
 @app.get("/api/v1/health")
 def health() -> dict[str, str]:
     """Liveness only. Does not reveal configuration or require a token."""
@@ -174,18 +245,7 @@ def list_runs(
     benchmark_version: str | None = None,
 ) -> dict[str, Any]:
     runs = []
-    if not RESULTS_DIR.is_dir():
-        return {"runs": runs, "count": 0}
-    for path in sorted(RESULTS_DIR.iterdir(), reverse=True):
-        if not path.is_dir() or not RUN_ID_RE.fullmatch(path.name):
-            continue
-        manifest_path = path / "run.json"
-        if not manifest_path.is_file():
-            continue
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
+    for manifest in artifacts.list_manifests():
         if model and manifest.get("model") != model:
             continue
         if benchmark_version and manifest.get("benchmark_version") != benchmark_version:
@@ -196,7 +256,7 @@ def list_runs(
 
 @app.get("/api/v1/runs/{run_id}", dependencies=[Depends(require_api_token)])
 def get_run(run_id: str) -> dict[str, Any]:
-    return safe_run_summary(read_manifest(run_directory(run_id)))
+    return safe_run_summary(artifacts.get_manifest(run_id))
 
 
 @app.get("/api/v1/runs/{run_id}/results", dependencies=[Depends(require_api_token)])
@@ -209,8 +269,7 @@ def list_results(
     subject: str | None = None,
     difficulty: str | None = None,
 ) -> dict[str, Any]:
-    path = run_directory(run_id)
-    rows = read_results(path)
+    rows = artifacts.get_results(run_id)
     filtered = []
     for row in rows:
         test = row.get("test") or {}
@@ -237,7 +296,7 @@ def list_results(
     dependencies=[Depends(require_api_token)],
 )
 def get_result(run_id: str, test_id: str) -> dict[str, Any]:
-    for row in read_results(run_directory(run_id)):
+    for row in artifacts.get_results(run_id):
         if row.get("test_id") == test_id:
             return public_result(row)
     raise HTTPException(status_code=404, detail="Result not found")
@@ -256,10 +315,8 @@ def artifact_enabled(name: str) -> bool:
 def get_system_prompt(run_id: str) -> Response:
     if not artifact_enabled("system_prompt"):
         raise HTTPException(status_code=403, detail="System prompt sharing is disabled")
-    path = run_directory(run_id) / "system_prompt.rendered.txt"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Prompt artifact not found")
-    return Response(path.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
+    content = artifacts.get_artifact_bytes(run_id, "system_prompt.rendered.txt")
+    return Response(content, media_type="text/plain; charset=utf-8")
 
 
 @app.get(
@@ -269,13 +326,35 @@ def get_system_prompt(run_id: str) -> Response:
 def get_profile(run_id: str) -> dict[str, Any]:
     if not artifact_enabled("profile"):
         raise HTTPException(status_code=403, detail="Profile sharing is disabled")
-    path = run_directory(run_id) / "student_profile.json"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Profile artifact not found")
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return json.loads(artifacts.get_artifact_bytes(run_id, "student_profile.json"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(status_code=500, detail="Profile artifact is unreadable") from None
+
+
+@app.get("/api/v1/runs/{run_id}/export", dependencies=[Depends(require_api_token)])
+def export_run(
+    run_id: str,
+    export_format: Literal["jsonl", "zip"] = Query(default="zip", alias="format"),
+) -> Response:
+    if export_format == "jsonl":
+        rows = [public_result(row) for row in artifacts.get_results(run_id)]
+        content = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+        return Response(
+            content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="{run_id}.jsonl"'},
+        )
+    content = make_export(
+        run_id,
+        include_prompt=artifact_enabled("system_prompt"),
+        include_profile=artifact_enabled("profile"),
+    )
+    return Response(
+        content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}.zip"'},
+    )
 
 
 @app.get("/api/v1/shares", dependencies=[Depends(require_api_token)])
@@ -289,7 +368,11 @@ def create_share(request: CreateShareRequest) -> dict[str, Any]:
     if len(run_ids) != len(request.run_ids):
         raise HTTPException(status_code=422, detail="run_ids must not contain duplicates")
     for run_id in run_ids:
-        run_directory(run_id)
+        artifacts.get_manifest(run_id)
+        if request.allow_system_prompt:
+            artifacts.get_artifact_bytes(run_id, "system_prompt.rendered.txt")
+        if request.allow_profile:
+            artifacts.get_artifact_bytes(run_id, "student_profile.json")
     expires_at = (
         time.time() + request.expires_in_hours * 3600
         if request.expires_in_hours is not None
@@ -312,10 +395,52 @@ def delete_share(share_id: str) -> dict[str, str]:
     return {"status": "revoked"}
 
 
-def verify_run_scope(share: dict[str, Any], run_id: str) -> Path:
+@app.post("/api/v1/comparisons", dependencies=[Depends(require_api_token)])
+def owner_comparison(request: ComparisonRequest) -> dict[str, Any]:
+    return compare_runs(request.run_ids, request.offset, request.limit)
+
+
+@app.get("/api/v1/shared/runs/{run_id}/export")
+def export_shared_run(
+    run_id: str,
+    export_format: Literal["jsonl", "zip"] = Query(default="zip", alias="format"),
+    share: dict[str, Any] = Depends(require_share),
+) -> Response:
+    verify_run_scope(share, run_id)
+    if export_format == "jsonl":
+        rows = [public_result(row) for row in artifacts.get_results(run_id)]
+        content = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+        return Response(
+            content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="{run_id}.jsonl"'},
+        )
+    content = make_export(
+        run_id,
+        include_prompt=share["artifacts"]["system_prompt"],
+        include_profile=share["artifacts"]["profile"],
+    )
+    return Response(
+        content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}.zip"'},
+    )
+
+
+@app.post("/api/v1/shared/comparisons")
+def shared_comparison(
+    request: ComparisonRequest,
+    share: dict[str, Any] = Depends(require_share),
+) -> dict[str, Any]:
+    for run_id in request.run_ids:
+        verify_run_scope(share, run_id)
+    return compare_runs(request.run_ids, request.offset, request.limit)
+
+
+def verify_run_scope(share: dict[str, Any], run_id: str) -> dict[str, Any]:
     if run_id not in share["run_ids"]:
         raise HTTPException(status_code=404, detail="Run not found")
-    return run_directory(run_id)
+    return artifacts.get_manifest(run_id)
 
 
 @app.get("/api/v1/shared/runs")
@@ -323,7 +448,7 @@ def list_shared_runs(share: dict[str, Any] = Depends(require_share)) -> dict[str
     runs = []
     for run_id in share["run_ids"]:
         try:
-            manifest = read_manifest(run_directory(run_id))
+            manifest = artifacts.get_manifest(run_id)
         except HTTPException as exc:
             if exc.status_code == 404:
                 continue
@@ -336,7 +461,7 @@ def list_shared_runs(share: dict[str, Any] = Depends(require_share)) -> dict[str
 def get_shared_run(
     run_id: str, share: dict[str, Any] = Depends(require_share)
 ) -> dict[str, Any]:
-    return safe_run_summary(read_manifest(verify_run_scope(share, run_id)))
+    return safe_run_summary(verify_run_scope(share, run_id))
 
 
 @app.get("/api/v1/shared/runs/{run_id}/results")
@@ -350,8 +475,8 @@ def list_shared_results(
     difficulty: str | None = None,
     share: dict[str, Any] = Depends(require_share),
 ) -> dict[str, Any]:
-    path = verify_run_scope(share, run_id)
-    rows = read_results(path)
+    verify_run_scope(share, run_id)
+    rows = artifacts.get_results(run_id)
     filtered = []
     for row in rows:
         test = row.get("test") or {}
@@ -379,7 +504,8 @@ def get_shared_result(
     test_id: str,
     share: dict[str, Any] = Depends(require_share),
 ) -> dict[str, Any]:
-    for row in read_results(verify_run_scope(share, run_id)):
+    verify_run_scope(share, run_id)
+    for row in artifacts.get_results(run_id):
         if row.get("test_id") == test_id:
             return public_result(row)
     raise HTTPException(status_code=404, detail="Result not found")
@@ -391,10 +517,9 @@ def get_shared_system_prompt(
 ) -> Response:
     if not share["artifacts"]["system_prompt"]:
         raise HTTPException(status_code=404, detail="Artifact not shared")
-    path = verify_run_scope(share, run_id) / "system_prompt.rendered.txt"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Prompt artifact not found")
-    return Response(path.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
+    verify_run_scope(share, run_id)
+    content = artifacts.get_artifact_bytes(run_id, "system_prompt.rendered.txt")
+    return Response(content, media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/v1/shared/runs/{run_id}/artifacts/profile")
@@ -403,10 +528,8 @@ def get_shared_profile(
 ) -> dict[str, Any]:
     if not share["artifacts"]["profile"]:
         raise HTTPException(status_code=404, detail="Artifact not shared")
-    path = verify_run_scope(share, run_id) / "student_profile.json"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Profile artifact not found")
+    verify_run_scope(share, run_id)
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return json.loads(artifacts.get_artifact_bytes(run_id, "student_profile.json"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(status_code=500, detail="Profile artifact is unreadable") from None

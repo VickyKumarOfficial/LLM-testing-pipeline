@@ -88,11 +88,13 @@ stable part. Support JSON responses and a downloadable JSONL export.
   per-run read-only credentials with expiry and optional prompt/profile access;
   owner can list and revoke them. Credentials are sent in the `Authorization:
   Share` header. SQLite is local development storage only.
-- **Phase 3, persistent storage and publish flow:** implemented for review.
+- **Phase 3, persistent storage and publish flow:** implemented and committed as
+  `228b747`.
   PostgreSQL stores the run catalog and share credentials; a controlled command
   publishes allowlisted run files to private Vercel Blob storage.
-- **Phase 4, remote reads and comparison UI:** connect the API to published
-  artifacts, align runs by test ID, and provide reviewer views/exports.
+- **Phase 4, remote reads and comparison UI:** implemented for review. The API
+  reads the published catalog/archives, compares by test ID, exports results,
+  and serves a small reviewer page for owner and share credentials.
 - **Phase 5, Vercel deployment:** deploy only after storage, access control,
   and artifact exclusions are in place.
 
@@ -108,10 +110,15 @@ All routes are under `/api/v1` and require HTTPS.
 | `GET /runs/{run_id}/results/{test_id}` | Full question and response record for one test. |
 | `GET /runs/{run_id}/artifacts/system-prompt` | Exact rendered system prompt snapshot, with content type text/plain and hash metadata. |
 | `GET /runs/{run_id}/artifacts/profile` | Student profile snapshot used for the run. |
-| `GET /runs/{run_id}/export` | Download the run as JSONL or a ZIP containing the manifest, outputs, prompt, profile, and performance summary. |
-| `POST /comparisons` | Compare two or more accessible run IDs. Return aligned per-test outputs and operational metrics. |
+| `GET /runs/{run_id}/export` | Download sanitized JSONL or a ZIP with run metadata, outputs, and performance summaries. Owner prompt/profile inclusion is controlled by server settings. |
+| `POST /comparisons` | Compare two to four accessible runs, aligned by test ID. Reports mismatched settings and does not choose a quality winner. |
 | `POST /shares` | Owner creates a read-only share for selected run IDs. Return a high-entropy share link/token with optional expiry. |
 | `DELETE /shares/{share_id}` | Owner revokes a share. |
+
+Share credentials use matching read routes under `/api/v1/shared/runs`,
+`POST /api/v1/shared/comparisons`, and
+`GET /api/v1/shared/runs/{run_id}/export`. Comparison responses are paginated
+in batches of at most 20 test IDs to keep response bodies bounded.
 
 Owner share management currently uses `GET`, `POST`, and `DELETE
 /api/v1/shares...` with the owner bearer token. Shared reads use

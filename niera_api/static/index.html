@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Niera benchmark review</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #18212b; background: #f4f6f8; }
+    body { margin: 0 auto; max-width: 1120px; padding: 28px 18px 60px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin-bottom: 4px; }
+    .muted { color: #5f6b76; }
+    .panel, .run, .case { background: #fff; border: 1px solid #dce2e8; border-radius: 10px; padding: 16px; margin: 14px 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+    label { display: grid; gap: 4px; }
+    input, select, button { font: inherit; padding: 8px 10px; border: 1px solid #b9c3cd; border-radius: 6px; }
+    input[type="checkbox"] { width: auto; }
+    button { cursor: pointer; background: #183f68; color: white; border-color: #183f68; }
+    button.secondary { background: #fff; color: #183f68; }
+    button:disabled { opacity: .55; cursor: default; }
+    #runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
+    .run { margin: 0; }
+    .run label { display: flex; align-items: start; gap: 9px; }
+    .case h3 { margin-top: 0; }
+    .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f5f7f9; border-radius: 6px; padding: 12px; margin: 6px 0; }
+    #notice { min-height: 1.5em; color: #8b2e20; }
+    #share-link { overflow-wrap: anywhere; }
+    @media (max-width: 640px) { body { padding: 18px 12px 40px; } }
+  </style>
+</head>
+<body>
+  <h1>Niera benchmark review</h1>
+  <p class="muted">Compare saved benchmark runs and inspect the original responses.</p>
+
+  <section class="panel">
+    <div class="row">
+      <label>Access type
+        <select id="scheme"><option value="Bearer">Owner</option><option value="Share">Shared review</option></select>
+      </label>
+      <label style="flex:1; min-width:260px">Access credential
+        <input id="token" type="password" autocomplete="off" placeholder="Paste owner or share credential">
+      </label>
+      <button id="connect">Load runs</button>
+    </div>
+    <p id="notice" role="status"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Runs</h2>
+    <p class="muted">Select two to four runs for an aligned comparison.</p>
+    <div id="runs"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="compare" disabled>Compare selected</button>
+      <button id="previous" class="secondary" disabled>Previous tests</button>
+      <button id="next" class="secondary" disabled>Next tests</button>
+      <button id="download" class="secondary" disabled>Download selected run</button>
+    </div>
+  </section>
+
+  <section id="owner-tools" class="panel" hidden>
+    <h2>Create a review share</h2>
+    <div class="row">
+      <label>Expires in hours <input id="expiry" type="number" min="1" max="8760" value="168"></label>
+      <label><span><input id="include-prompt" type="checkbox"> Include system prompt</span></label>
+      <label><span><input id="include-profile" type="checkbox"> Include student profile</span></label>
+      <button id="create-share">Create share for selected runs</button>
+    </div>
+    <p id="share-link"></p>
+    <h3>Existing shares</h3>
+    <div id="shares"></div>
+  </section>
+
+  <section id="comparison">
+    <h2>Comparison</h2>
+    <div id="comparison-meta" class="muted"></div>
+    <div id="cases"></div>
+  </section>
+
+  <script>
+    (() => {
+      const api = "/api/v1";
+      const byId = id => document.getElementById(id);
+      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0 };
+      const headers = () => ({ "Authorization": `${state.scheme} ${state.credential}` });
+      const selectedIds = () => [...document.querySelectorAll("input[name=run]:checked")].map(x => x.value);
+      const notice = message => { byId("notice").textContent = message || ""; };
+
+      async function request(path, options = {}) {
+        const response = await fetch(`${api}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.detail || `Request failed (${response.status})`);
+        }
+        return response;
+      }
+
+      function setMode(scheme, token) {
+        state.scheme = scheme;
+        state.credential = token;
+        byId("scheme").value = scheme;
+        byId("token").value = token;
+        byId("owner-tools").hidden = scheme !== "Bearer";
+      }
+
+      function renderRuns(runs) {
+        state.runs = runs;
+        const root = byId("runs");
+        root.replaceChildren();
+        for (const run of runs) {
+          const card = document.createElement("div");
+          card.className = "run";
+          const label = document.createElement("label");
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.name = "run";
+          checkbox.value = run.run_id;
+          checkbox.addEventListener("change", () => { state.offset = 0; updateButtons(); });
+          const detail = document.createElement("span");
+          detail.textContent = `${run.model || "unknown model"} · ${run.run_id} · ${run.ok_count ?? 0}/${run.test_count ?? 0} responses`;
+          label.append(checkbox, detail);
+          card.append(label);
+          root.append(card);
+        }
+        updateButtons();
+      }
+
+      function updateButtons() {
+        const ids = selectedIds();
+        byId("compare").disabled = ids.length < 2 || ids.length > 4;
+        byId("download").disabled = ids.length !== 1;
+        byId("create-share").disabled = state.scheme !== "Bearer" || ids.length < 1 || ids.length > 20;
+        byId("previous").disabled = state.offset <= 0;
+        byId("next").disabled = state.offset + 10 >= state.totalTests;
+      }
+
+      async function loadRuns() {
+        state.scheme = byId("scheme").value;
+        state.credential = byId("token").value.trim();
+        byId("owner-tools").hidden = state.scheme !== "Bearer";
+        if (!state.credential) { notice("Enter an access credential first."); return; }
+        notice("Loading runs…");
+        try {
+          const route = state.scheme === "Share" ? "/shared/runs" : "/runs";
+          const response = await request(route);
+          const data = await response.json();
+          renderRuns(data.runs || []);
+          notice(`${data.count || 0} run(s) available.`);
+          if (state.scheme === "Bearer") await loadShares();
+        } catch (error) { notice(error.message); }
+      }
+
+      function addText(parent, tag, text, className) {
+        const node = document.createElement(tag);
+        node.textContent = text ?? "";
+        if (className) node.className = className;
+        parent.append(node);
+        return node;
+      }
+
+      async function compare() {
+        const run_ids = selectedIds();
+        if (run_ids.length < 2 || run_ids.length > 4) return;
+        notice("Comparing responses…");
+        try {
+          const route = state.scheme === "Share" ? "/shared/comparisons" : "/comparisons";
+          const response = await request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_ids, offset: state.offset, limit: 10 }) });
+          const data = await response.json();
+          state.totalTests = data.total_tests || 0;
+          const meta = byId("comparison-meta");
+          meta.replaceChildren();
+          addText(meta, "p", data.comparable ? "Matched settings across these runs." : `Settings differ: ${(data.comparison_mismatches || []).join(", ")}. Read as a diagnostic comparison.`);
+          const root = byId("cases");
+          root.replaceChildren();
+          for (const test of data.tests || []) {
+            const card = document.createElement("article");
+            card.className = "case";
+            addText(card, "h3", test.test_id);
+            addText(card, "p", test.question);
+            const answers = document.createElement("div");
+            answers.className = "answers";
+            test.runs.forEach((run, index) => {
+              const section = document.createElement("section");
+              addText(section, "strong", run ? `${run.model} (${run.run_id})` : `Missing result · ${run_ids[index]}`);
+              addText(section, "pre", run ? (run.output || run.error?.type || "No visible response") : "No result for this test.");
+              answers.append(section);
+            });
+            card.append(answers);
+            root.append(card);
+          }
+          notice(`Compared ${data.tests?.length || 0} of ${data.total_tests || 0} test(s).`);
+          updateButtons();
+        } catch (error) { notice(error.message); }
+      }
+
+      async function downloadRun() {
+        const id = selectedIds()[0];
+        if (!id) return;
+        try {
+          const route = state.scheme === "Share" ? `/shared/runs/${encodeURIComponent(id)}/export?format=zip` : `/runs/${encodeURIComponent(id)}/export?format=zip`;
+          const response = await request(route);
+          const blob = await response.blob();
+          const anchor = document.createElement("a");
+          anchor.href = URL.createObjectURL(blob);
+          anchor.download = `${id}.zip`;
+          anchor.click();
+          setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
+        } catch (error) { notice(error.message); }
+      }
+
+      async function createShare() {
+        const run_ids = selectedIds();
+        if (!run_ids.length || run_ids.length > 20) return;
+        try {
+          const response = await request("/shares", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              run_ids,
+              expires_in_hours: Number(byId("expiry").value || 168),
+              allow_system_prompt: byId("include-prompt").checked,
+              allow_profile: byId("include-profile").checked,
+            }),
+          });
+          const record = await response.json();
+          const link = `${location.origin}${location.pathname}#share=${encodeURIComponent(record.share_token)}`;
+          byId("share-link").textContent = `Copy this one-time link now: ${link}`;
+          await loadShares();
+        } catch (error) { notice(error.message); }
+      }
+
+      async function loadShares() {
+        try {
+          const response = await request("/shares");
+          const data = await response.json();
+          const root = byId("shares");
+          root.replaceChildren();
+          for (const share of data.shares || []) {
+            const row = document.createElement("p");
+            const detail = document.createElement("span");
+            detail.textContent = `${share.share_id} · ${share.run_ids.join(", ")} · expires ${share.expires_at ? new Date(share.expires_at * 1000).toLocaleString() : "never"} `;
+            const button = document.createElement("button");
+            button.className = "secondary";
+            button.textContent = "Revoke";
+            button.addEventListener("click", async () => {
+              try { await request(`/shares/${encodeURIComponent(share.share_id)}`, { method: "DELETE" }); await loadShares(); }
+              catch (error) { notice(error.message); }
+            });
+            row.append(detail, button);
+            root.append(row);
+          }
+        } catch (error) { notice(error.message); }
+      }
+
+      byId("connect").addEventListener("click", loadRuns);
+      byId("compare").addEventListener("click", compare);
+      byId("previous").addEventListener("click", () => { state.offset = Math.max(0, state.offset - 10); compare(); });
+      byId("next").addEventListener("click", () => { state.offset += 10; compare(); });
+      byId("download").addEventListener("click", downloadRun);
+      byId("create-share").addEventListener("click", createShare);
+      byId("scheme").addEventListener("change", () => {
+        byId("owner-tools").hidden = byId("scheme").value !== "Bearer";
+        updateButtons();
+      });
+
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      if (fragment.has("share")) {
+        setMode("Share", fragment.get("share"));
+        loadRuns();
+      }
+    })();
+  </script>
+</body>
+</html>

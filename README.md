@@ -279,6 +279,21 @@ After reviewing the dry-run report, publish with:
 
 The script stores the ZIP in private Blob storage and indexes its path, manifest,
 artifact list, digest, and publish status in PostgreSQL. It never uploads the
-scoring sheet/key or dataset directory. This Phase 3 publisher stores runs for
-future API reads; the current API still serves local files until Phase 4 connects
-it to the remote catalog and private blobs.
+scoring sheet/key or dataset directory. Set the API to remote mode to serve the
+published runs through the catalog and private blobs.
+
+### Serve published runs
+
+The remote-read mode and reviewer page use published archives. To run the API
+against a published archive, set `NIERA_API_STORAGE_BACKEND=remote` along with
+`DATABASE_URL` and the Blob credentials available to the Vercel Python SDK, then
+start the API as usual. The API reads only records marked `published`; failed or
+in-progress uploads stay hidden. Keep `NIERA_API_STORAGE_BACKEND=local` for the
+repository-backed development view.
+
+Open `/` for the reviewer page. An owner enters the `NIERA_API_TOKEN` and can
+compare runs, download a run archive, create scoped shares, and revoke existing
+shares. A reviewer opens the generated link; its credential is in the URL
+fragment and is sent to the API in an `Authorization: Share` header. The fragment
+is not sent in the HTTP request path. The comparison page labels configuration
+mismatches and does not declare an answer-quality winner.

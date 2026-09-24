@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from niera_api import catalog  # noqa: E402
-from niera_api.main import RUN_ID_RE, RESULTS_DIR  # noqa: E402
+from niera_api.main_paths import RESULTS_DIR, RUN_ID_RE  # noqa: E402
 
 
 MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
@@ -83,6 +83,9 @@ def validate_run(run_id: str, include_prompt: bool, include_profile: bool):
 
 
 def make_archive(run_dir: Path, names: list[str]) -> tuple[bytes, str]:
+    total_uncompressed = sum((run_dir / name).stat().st_size for name in names)
+    if total_uncompressed > MAX_ARCHIVE_BYTES:
+        raise ValueError("run artifacts exceed the 100 MB publish limit")
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in names:
