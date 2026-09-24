@@ -26,12 +26,14 @@ class OllamaBackend(ModelBackend):
         }
         if config.seed is not None:
             payload["options"]["seed"] = config.seed
+        if config.num_ctx is not None:
+            payload["options"]["num_ctx"] = config.num_ctx
 
         started = time.perf_counter()
         response = requests.post(
             f"{self.host}/api/chat",
             json=payload,
-            timeout=1800,
+            timeout=config.request_timeout_s,
         )
         latency_ms = (time.perf_counter() - started) * 1000
         response.raise_for_status()

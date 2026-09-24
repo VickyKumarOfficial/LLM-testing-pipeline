@@ -43,11 +43,14 @@ def main():
     parser.add_argument("--dataset", default="datasets/smoke.jsonl")
     parser.add_argument("--profile", default="config/student_profile.json")
     parser.add_argument("--ollama-host", default="http://localhost:11434")
+    parser.add_argument("--generation", default="config/generation.yaml",
+                        help="Generation config. Change only for diagnostic "
+                             "reruns; comparison runs must share one config.")
     parser.add_argument("--limit", type=int, default=None,
                         help="Run only the first N tests (for quick checks).")
     args = parser.parse_args()
 
-    config = load_generation_config(ROOT / "config/generation.yaml")
+    config = load_generation_config(ROOT / args.generation)
     dataset_path = ROOT / args.dataset
     profile_path = ROOT / args.profile
 

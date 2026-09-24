@@ -1,0 +1,11 @@
+# ==========================================================
+# QWEN3:8B THINKING-ONLY RERUN (4)
+# Tests where qwen3:8b exhausted max_tokens=8192 inside <think> and returned
+# an empty answer in run 20260922_104435_c7a061. Lines copied verbatim from
+# niera_legitimate_questions_verified_v1.jsonl.
+# Run with: --generation config/generation.qwen3_budget_rerun.yaml
+# ==========================================================
+{"test_id": "PHY-NC-03", "track": "NCERT", "subject": "Physics", "class": "11", "chapter": "System of Particles and Rotational Motion", "difficulty": "Moderate", "source": "NCERT Exemplar", "source_reference": "Class XI Physics Exemplar, collisions", "question": "Three identical balls are on a frictionless line; two are initially at rest and touching. A third identical ball approaches with speed V and collides elastically. Determine the possible final velocities.", "answer_type": "long_answer"}
+{"test_id": "MATH-JEE-02", "track": "JEE", "subject": "Mathematics", "class": "12", "chapter": "Limits", "difficulty": "Moderate", "source": "JEE Advanced 2024 Paper 2", "source_reference": "Paper 2, Q3", "question": "For real k, if lim(x→0+) [sin(sin(kx)) + cos x + x]^(2/x) = e^6, determine k. Options: 1, 2, 3, 4.", "answer_type": "mcq"}
+{"test_id": "PHY-JEE-03", "track": "JEE", "subject": "Physics", "class": "12", "chapter": "Electrostatics / Oscillations", "difficulty": "Moderate", "source": "JEE Advanced 2024 Paper 1", "source_reference": "Paper 1, Q3", "question": "Two identical charged beads of charge q and mass m lie on a horizontal frictionless circular hoop of radius R. One is fixed and the other executes small oscillations about equilibrium. Determine the square of the angular frequency.", "answer_type": "mcq"}
+{"test_id": "CHEM-JEE-03", "track": "JEE", "subject": "Chemistry", "class": "11", "chapter": "Organic Chemistry", "difficulty": "Moderate", "source": "JEE Advanced 2024 Paper 2", "source_reference": "Paper 2, Q3", "question": "L-glucose undergoes HI on heating, then Cr2O3 at 775 K under pressure; the product is subsequently treated with excess Cl2 under UV light. Identify the major final product.", "answer_type": "mcq"}

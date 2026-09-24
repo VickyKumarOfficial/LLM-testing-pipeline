@@ -1,0 +1,13 @@
+# DIAGNOSTIC ONLY - not a comparison config.
+#
+# Reruns the 4 tests where qwen3:8b spent the whole 8192-token budget inside
+# <think> and returned no visible answer (run 20260922_104435_c7a061).
+# temperature, top_p and seed match config/generation.yaml; the token budget is
+# the only variable. Results from this config must not be scored alongside the
+# main runs, since the other models ran at 8192.
+temperature: 0.2
+top_p: 0.9
+max_tokens: 28672
+seed: 42
+num_ctx: 32768
+request_timeout_s: 3600
