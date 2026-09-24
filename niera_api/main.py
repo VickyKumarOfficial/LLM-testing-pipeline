@@ -362,6 +362,42 @@ def get_profile(run_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="Profile artifact is unreadable") from None
 
 
+def run_context(run_id: str, include_prompt: bool, include_profile: bool) -> dict[str, Any]:
+    manifest = artifacts.get_manifest(run_id)
+    context: dict[str, Any] = {
+        "run_id": run_id,
+        "model": manifest.get("model"),
+        "system_prompt": None,
+        "student_profile": None,
+    }
+    if include_prompt:
+        try:
+            context["system_prompt"] = artifacts.get_artifact_bytes(
+                run_id, "system_prompt.rendered.txt"
+            ).decode("utf-8")
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=500, detail="System prompt is unreadable") from None
+    if include_profile:
+        try:
+            raw_profile = artifacts.get_artifact_bytes(run_id, "student_profile.json")
+            context["student_profile"] = json.loads(raw_profile.decode("utf-8"))
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise HTTPException(status_code=500, detail="Student profile is unreadable") from None
+    return context
+
+
+@app.get("/api/v1/runs/{run_id}/context", dependencies=[Depends(require_api_token)])
+def get_run_context(run_id: str) -> dict[str, Any]:
+    """Return available prompt/profile details to the authenticated owner."""
+    return run_context(run_id, include_prompt=True, include_profile=True)
+
+
 @app.get("/api/v1/runs/{run_id}/export", dependencies=[Depends(require_api_token)])
 def export_run(
     run_id: str,
@@ -471,6 +507,19 @@ def verify_run_scope(share: dict[str, Any], run_id: str) -> dict[str, Any]:
     if run_id not in share["run_ids"]:
         raise HTTPException(status_code=404, detail="Run not found")
     return artifacts.get_manifest(run_id)
+
+
+@app.get("/api/v1/shared/runs/{run_id}/context")
+def get_shared_run_context(
+    run_id: str, share: dict[str, Any] = Depends(require_share)
+) -> dict[str, Any]:
+    verify_run_scope(share, run_id)
+    permissions = share["artifacts"]
+    return run_context(
+        run_id,
+        include_prompt=permissions["system_prompt"],
+        include_profile=permissions["profile"],
+    )
 
 
 @app.get("/api/v1/shared/runs")

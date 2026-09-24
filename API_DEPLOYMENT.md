@@ -47,18 +47,18 @@ python scripts/publish_run.py 20260922_104435_c7a061 --dry-run
 python scripts/publish_run.py 20260922_104435_c7a061 --write-archive .api-data/publish-ready/20260922_104435_c7a061.zip
 ```
 
-To intentionally include the exact rendered system prompt in a private
-archive, add `--include-system-prompt` to the second command. The owner can
-then choose to include it when creating a review share. Student profiles stay
-excluded.
+To intentionally include the exact rendered system prompt and/or the student
+profile in a private archive, add `--include-system-prompt` and/or
+`--include-profile` to the second command. The owner can then choose separately
+which artifacts to include in a review share.
 
 Open `/`, choose **Owner**, enter `NIERA_API_TOKEN`, load runs, then select the
 ZIP under **Publish benchmark runs**. The endpoint accepts archives up to 4 MB,
 validates the run manifest and results, removes internal `metadata.thinking`
 and local filesystem paths, and writes the sanitized archive to private Blob
-storage and its catalog record to PostgreSQL. It rejects student profile files.
-System prompts are accepted only when intentionally included in the local ZIP.
-`--dry-run` does not upload anything.
+storage and its catalog record to PostgreSQL. System prompts and profiles are
+accepted only when intentionally included in the local ZIP. `--dry-run` does
+not upload anything.
 
 Remote API reads use only catalog entries marked `published`. They verify the
 archive digest before returning content. Share credentials and run metadata

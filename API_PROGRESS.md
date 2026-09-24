@@ -141,7 +141,7 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 | 2026-09-24 | Publisher dry-run initially lacked FastAPI in the active virtualenv. | Installed `requirements.txt` into the existing `.venv`; dry-run then validated all four publish records. Upload has not been performed. | Resolved |
 | 2026-09-24 | The local publisher cannot access hosted database and Blob secrets even after CLI linking. | Confirmed Vercel withholds sensitive values from local environment commands. Added browser upload through the deployed API, which uses Vercel's runtime credentials. | Implemented locally; deploy pending |
 | 2026-09-24 | Qwen rerun covered only two of four empty outputs and used a different token/context configuration. | Kept the original run unchanged and added a two-test partial-retry manifest. It records one recovered response and one remaining empty response, with the changed configuration visible. | Prepared locally |
-| 2026-09-24 | Raw result archives would have included model `metadata.thinking`. | Publisher now strips this field from the upload archive while preserving local originals and fields needed for review. Dry-run archive inspection confirmed it is absent. | Resolved locally; deployment pending |
+| 2026-09-24 | Raw result archives would have included model `metadata.thinking`. | Publisher strips this field from upload archives while preserving local originals and fields needed for review. | Resolved |
 | 2026-09-25 | Downloading a published run returned HTTP 500 because the API expected a `.stream` attribute on the Vercel Blob SDK result. | Updated remote archive reads to use the SDK's `content` bytes, validate the response type and archive size, and close the async client. Deployed commit `5c2c5eb`; production page and API schema return HTTP 200. No post-deploy download request is present in Vercel logs yet, so the browser download still needs confirmation. | Fixed and deployed; awaiting user confirmation |
 
 ## Owner upload phase (in progress)
@@ -182,10 +182,28 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   notation. Uses DOM text nodes/elements rather than injecting model HTML.
 - Clarified the owner share controls: a share is a selected-run, read-only link;
   168 hours is seven days; other reviewers use the generated link and do not
-  need the owner's OpenSSL token. Profile sharing is disabled in hosted uploads.
-- System prompts are currently not in uploaded run archives. Added opt-in
-  support for `--include-system-prompt`, with the prompt still private unless
-  selected when creating a share. Existing runs must be republished with that
-  flag before the system prompt checkbox can work for them.
+  need the owner's OpenSSL token.
+- System prompts and profiles are currently absent from existing hosted runs.
+  Added opt-in support for `--include-system-prompt` and `--include-profile`;
+  each stays private to the owner unless selected in the share options.
 - Changes are local and awaiting review. No deployment or additional prompt
   upload has occurred.
+
+## Run context display and share repair (in progress)
+
+- User reported that Create share did not work and asked to display system
+  prompts/profiles directly using the review page space. The previous screenshot
+  had prompt/profile sharing selected, but existing hosted archives excluded
+  both, so the API rejects creating a share that requests unavailable files.
+- Added owner-authenticated `GET /api/v1/runs/{run_id}/context` and a
+  share-scoped context route. The reviewer page displays prompt/profile in
+  expandable, per-run panels when a run is selected. Share readers only receive
+  artifact fields explicitly granted to their share.
+- Enabled opt-in `--include-profile` archive publishing alongside prompts.
+  Existing hosted runs need replacement ZIPs to include either artifact.
+- Prepared four ignored replacement ZIPs in
+  `.api-data/publish-ready/context/` with prompt and profile included. Each is
+  below 60 KB. No upload occurred.
+- Share creation now checks that selected artifact files exist and provides a
+  direct re-upload instruction instead of making an opaque failing request.
+- Changes are local and awaiting review. No deployment or share was created.

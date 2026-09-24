@@ -274,8 +274,9 @@ the hosted owner page, write it locally:
 
 To opt in to including the exact rendered system prompt in the private run
 archive, add `--include-system-prompt` when creating it. The owner can then
-enable **Include system prompt** when making a share. Student profiles are
-still excluded from hosted uploads.
+enable **Include system prompt** when making a share. Add `--include-profile`
+to include the student profile; the owner can grant that separately when making
+a share. Both are shown directly in the review page for selected runs.
 
 Before upload, the publisher removes `metadata.thinking` from the archived
 `results.jsonl`. The local source results remain unchanged. The shared archive
@@ -283,10 +284,10 @@ keeps the final answer, question, and generation metadata used by the review UI.
 
 Open the deployed reviewer page with the owner token and upload the ZIP from
 **Publish benchmark runs**. The owner-only API uses Vercel's database and Blob
-secrets directly. Uploads are limited to 4 MB and exclude profiles, local
-filesystem paths, and `metadata.thinking`. Prompts are excluded unless you
-explicitly add `--include-system-prompt`. The local archive remains in the
-ignored `.api-data/` directory until you remove it.
+secrets directly. Uploads are limited to 4 MB and exclude local filesystem
+paths and `metadata.thinking`. Prompts and profiles are excluded unless you
+explicitly add `--include-system-prompt` and/or `--include-profile`. The local
+archive remains in the ignored `.api-data/` directory until you remove it.
 
 ### Serve published runs
 

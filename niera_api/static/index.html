@@ -39,6 +39,13 @@
     .comparison-progress strong { display: block; font-size: 1.08rem; }
     .comparison-progress p { margin: 4px 0 0; }
     .help { margin: 4px 0 12px; color: #526171; max-width: 850px; }
+    .context-runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+    .context-run { border: 1px solid #dce2e8; border-radius: 8px; padding: 14px; min-width: 0; }
+    .context-run h3 { margin: 0 0 10px; }
+    .context-run details { border-top: 1px solid #e2e7ec; padding: 9px 0; }
+    .context-run summary { cursor: pointer; color: #183f68; font-weight: 650; }
+    .context-run pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: #f5f7f9; border-radius: 6px; padding: 12px; font: .92rem/1.55 system-ui, sans-serif; }
+    .context-empty { color: #687787; }
     hr { border: 0; border-top: 1px solid #dce2e8; margin: 22px 0; }
     #notice { min-height: 1.5em; color: #8b2e20; }
     #share-link { overflow-wrap: anywhere; }
@@ -80,22 +87,28 @@
     <div class="row">
       <label>Link expires after (hours) <input id="expiry" type="number" min="1" max="8760" value="168"></label>
       <label><span><input id="include-prompt" type="checkbox"> Include system prompt</span></label>
-      <label><span><input id="include-profile" type="checkbox" disabled> Include student profile (unavailable)</span></label>
+      <label><span><input id="include-profile" type="checkbox"> Include student profile</span></label>
       <button id="create-share">Create share for selected runs</button>
     </div>
-    <p class="help">168 hours is the default expiry (7 days). The rendered system prompt is the exact instructions the model received. Existing uploaded runs do not include it; republish a run with <code>--include-system-prompt</code> before enabling this option. Profiles remain excluded.</p>
+    <p class="help">168 hours is the default expiry (7 days). Prompt and profile details are included only if you select them here and each run has that artifact in its uploaded archive.</p>
     <p id="share-link"></p>
     <h3>Existing shares</h3>
     <div id="shares"></div>
     <hr>
     <h3>Publish benchmark runs</h3>
-    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner. To include the exact rendered system prompt in a run, create its ZIP with <code>--include-system-prompt</code>; prompt sharing still requires the checkbox above.</p>
+    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner. Use <code>--include-system-prompt</code> and/or <code>--include-profile</code> to include these details in the hosted run. Recipients only see them if you also select the matching share option above.</p>
     <div class="row">
       <label style="flex:1; min-width:260px">Run archives
         <input id="run-archives" type="file" accept=".zip,application/zip" multiple>
       </label>
       <button id="publish-runs">Upload selected archives</button>
     </div>
+  </section>
+
+  <section id="run-context" class="panel" hidden>
+    <h2>System prompts and student profiles</h2>
+    <p class="help">Details for the selected runs. Expand or collapse each section. Shared reviewers see only details granted by their review link.</p>
+    <div id="context-runs" class="context-runs"></div>
   </section>
 
   <section id="comparison">
@@ -109,7 +122,7 @@
     (() => {
       const api = "/api/v1";
       const byId = id => document.getElementById(id);
-      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0 };
+      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0, contextByRun: {} };
       const headers = () => ({ "Authorization": `${state.scheme} ${state.credential}` });
       const selectedIds = () => [...document.querySelectorAll("input[name=run]:checked")].map(x => x.value);
       const notice = message => { byId("notice").textContent = message || ""; };
@@ -143,7 +156,7 @@
           checkbox.type = "checkbox";
           checkbox.name = "run";
           checkbox.value = run.run_id;
-          checkbox.addEventListener("change", () => { state.offset = 0; updateButtons(); });
+          checkbox.addEventListener("change", () => { state.offset = 0; updateButtons(); loadRunContexts(); });
           const detail = document.createElement("span");
           detail.textContent = `${run.model || "unknown model"} · ${run.run_id} · ${run.ok_count ?? 0}/${run.test_count ?? 0} responses`;
           label.append(checkbox, detail);
@@ -329,6 +342,18 @@
         const run_ids = selectedIds();
         if (!run_ids.length || run_ids.length > 20) return;
         try {
+          if (byId("include-prompt").checked || byId("include-profile").checked) {
+            await loadRunContexts();
+            for (const id of run_ids) {
+              const context = state.contextByRun[id] || {};
+              if (byId("include-prompt").checked && !context.system_prompt) {
+                throw new Error(`Run ${id} has no hosted system prompt. Re-upload it with --include-system-prompt first.`);
+              }
+              if (byId("include-profile").checked && !context.student_profile) {
+                throw new Error(`Run ${id} has no hosted student profile. Re-upload it with --include-profile first.`);
+              }
+            }
+          }
           const response = await request("/shares", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -367,6 +392,44 @@
             root.append(row);
           }
         } catch (error) { notice(error.message); }
+      }
+
+      async function loadRunContexts() {
+        const ids = selectedIds();
+        const section = byId("run-context");
+        const root = byId("context-runs");
+        state.contextByRun = {};
+        root.replaceChildren();
+        section.hidden = ids.length === 0;
+        if (!ids.length) return;
+        for (const id of ids) {
+          const run = state.runs.find(item => item.run_id === id);
+          const card = document.createElement("article");
+          card.className = "context-run";
+          addText(card, "h3", `${run?.model || "Run"} · ${id}`);
+          addText(card, "p", "Loading run details…", "context-empty");
+          root.append(card);
+          try {
+            const path = state.scheme === "Share"
+              ? `/shared/runs/${encodeURIComponent(id)}/context`
+              : `/runs/${encodeURIComponent(id)}/context`;
+            const response = await request(path);
+            const context = await response.json();
+            state.contextByRun[id] = context;
+            card.querySelector(".context-empty")?.remove();
+            const prompt = document.createElement("details"); prompt.open = true;
+            addText(prompt, "summary", "System prompt");
+            if (context.system_prompt) addText(prompt, "pre", context.system_prompt);
+            else addText(prompt, "p", state.scheme === "Share" ? "Not included in this review link." : "Not in this hosted run yet. Re-upload it with --include-system-prompt.", "context-empty");
+            const profile = document.createElement("details"); profile.open = true;
+            addText(profile, "summary", "Student profile");
+            if (context.student_profile) addText(profile, "pre", JSON.stringify(context.student_profile, null, 2));
+            else addText(profile, "p", state.scheme === "Share" ? "Not included in this review link." : "Not in this hosted run yet. Re-upload it with --include-profile.", "context-empty");
+            card.append(prompt, profile);
+          } catch (error) {
+            card.querySelector(".context-empty").textContent = error.message;
+          }
+        }
       }
 
       async function publishRuns() {

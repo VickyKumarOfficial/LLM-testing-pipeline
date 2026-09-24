@@ -22,6 +22,7 @@ ALLOWED_ARTIFACTS = {
     "performance.json",
     "performance.txt",
     "system_prompt.rendered.txt",
+    "student_profile.json",
 }
 
 
@@ -111,6 +112,8 @@ def sanitize_archive(content: bytes) -> tuple[bytes, dict[str, Any], list[str], 
                     "system_prompt.rendered.txt",
                     source.read("system_prompt.rendered.txt"),
                 )
+            if "student_profile.json" in names:
+                output.writestr("student_profile.json", source.read("student_profile.json"))
             for name in ("performance.json", "performance.txt"):
                 if name in names:
                     data = source.read(name)

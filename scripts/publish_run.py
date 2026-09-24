@@ -180,8 +180,6 @@ def main() -> None:
         if args.dry_run and args.write_archive:
             raise ValueError("choose either --dry-run or --write-archive")
         if args.write_archive:
-            if args.include_profile:
-                raise ValueError("hosted uploads do not accept student profiles")
             args.write_archive.parent.mkdir(parents=True, exist_ok=True)
             args.write_archive.write_bytes(archive)
             print(json.dumps({
