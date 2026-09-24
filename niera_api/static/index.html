@@ -21,9 +21,25 @@
     #runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
     .run { margin: 0; }
     .run label { display: flex; align-items: start; gap: 9px; }
-    .case h3 { margin-top: 0; }
+    .case { margin: 18px 0; }
+    .case h3 { margin: 0 0 8px; color: #183f68; }
+    .case-question { margin: 0 0 14px; font-size: 1.05rem; }
     .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f5f7f9; border-radius: 6px; padding: 12px; margin: 6px 0; }
+    .answer { min-width: 0; border: 1px solid #dce2e8; border-radius: 8px; padding: 12px; background: #fbfcfd; }
+    .answer h4 { margin: 0 0 8px; overflow-wrap: anywhere; }
+    .answer-content { overflow-wrap: anywhere; line-height: 1.7; }
+    .answer-content p { margin: 0 0 10px; }
+    .answer-content p:last-child, .answer-content ul:last-child, .answer-content ol:last-child { margin-bottom: 0; }
+    .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { margin: 14px 0 6px; }
+    .answer-content h1 { font-size: 1.35rem; } .answer-content h2 { font-size: 1.2rem; } .answer-content h3 { font-size: 1.08rem; }
+    .answer-content ul, .answer-content ol { padding-left: 24px; margin: 4px 0 10px; }
+    .answer-content code, .math-inline { background: #eef2f6; border-radius: 4px; padding: 1px 4px; font: .92em ui-monospace, monospace; }
+    .math-block { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f5f8; border-left: 3px solid #9aafc4; padding: 9px 12px; margin: 8px 0; font: .94em ui-monospace, monospace; }
+    .comparison-progress { border-left: 4px solid #2876b9; background: #eaf3fb; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+    .comparison-progress strong { display: block; font-size: 1.08rem; }
+    .comparison-progress p { margin: 4px 0 0; }
+    .help { margin: 4px 0 12px; color: #526171; max-width: 850px; }
+    hr { border: 0; border-top: 1px solid #dce2e8; margin: 22px 0; }
     #notice { min-height: 1.5em; color: #8b2e20; }
     #share-link { overflow-wrap: anywhere; }
     @media (max-width: 640px) { body { padding: 18px 12px 40px; } }
@@ -52,26 +68,28 @@
     <div id="runs"></div>
     <div class="row" style="margin-top:12px">
       <button id="compare" disabled>Compare selected</button>
-      <button id="previous" class="secondary" disabled>Previous tests</button>
-      <button id="next" class="secondary" disabled>Next tests</button>
+      <button id="previous" class="secondary" disabled>Previous 10 tests</button>
+      <button id="next" class="secondary" disabled>Next 10 tests</button>
       <button id="download" class="secondary" disabled>Download selected run</button>
     </div>
   </section>
 
   <section id="owner-tools" class="panel" hidden>
     <h2>Create a review share</h2>
+    <p class="help">Create a private link that lets another person view and compare only the runs you select. They use that link; they do not need your owner key or their own OpenSSL key. You can revoke the link below.</p>
     <div class="row">
-      <label>Expires in hours <input id="expiry" type="number" min="1" max="8760" value="168"></label>
+      <label>Link expires after (hours) <input id="expiry" type="number" min="1" max="8760" value="168"></label>
       <label><span><input id="include-prompt" type="checkbox"> Include system prompt</span></label>
-      <label><span><input id="include-profile" type="checkbox"> Include student profile</span></label>
+      <label><span><input id="include-profile" type="checkbox" disabled> Include student profile (unavailable)</span></label>
       <button id="create-share">Create share for selected runs</button>
     </div>
+    <p class="help">168 hours is the default expiry (7 days). The rendered system prompt is the exact instructions the model received. Existing uploaded runs do not include it; republish a run with <code>--include-system-prompt</code> before enabling this option. Profiles remain excluded.</p>
     <p id="share-link"></p>
     <h3>Existing shares</h3>
     <div id="shares"></div>
     <hr>
     <h3>Publish benchmark runs</h3>
-    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner.</p>
+    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner. To include the exact rendered system prompt in a run, create its ZIP with <code>--include-system-prompt</code>; prompt sharing still requires the checkbox above.</p>
     <div class="row">
       <label style="flex:1; min-width:260px">Run archives
         <input id="run-archives" type="file" accept=".zip,application/zip" multiple>
@@ -82,6 +100,7 @@
 
   <section id="comparison">
     <h2>Comparison</h2>
+    <div id="comparison-progress" class="comparison-progress" hidden aria-live="polite"></div>
     <div id="comparison-meta" class="muted"></div>
     <div id="cases"></div>
   </section>
@@ -167,6 +186,81 @@
         return node;
       }
 
+      function appendInline(parent, text) {
+        const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$)/g;
+        let cursor = 0;
+        for (const match of text.matchAll(pattern)) {
+          if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index)));
+          const token = match[0];
+          let node;
+          if (token.startsWith("**")) {
+            node = document.createElement("strong"); node.textContent = token.slice(2, -2);
+          } else if (token.startsWith("*")) {
+            node = document.createElement("em"); node.textContent = token.slice(1, -1);
+          } else if (token.startsWith("`")) {
+            node = document.createElement("code"); node.textContent = token.slice(1, -1);
+          } else {
+            node = document.createElement("span"); node.className = "math-inline"; node.textContent = token.slice(1, -1);
+          }
+          parent.append(node);
+          cursor = match.index + token.length;
+        }
+        if (cursor < text.length) parent.append(document.createTextNode(text.slice(cursor)));
+      }
+
+      function renderMarkdown(parent, value) {
+        const lines = String(value || "No visible response").replace(/\r/g, "").split("\n");
+        let paragraph = [];
+        let list = null;
+        const flushParagraph = () => {
+          if (!paragraph.length) return;
+          const p = document.createElement("p");
+          appendInline(p, paragraph.join(" "));
+          parent.append(p);
+          paragraph = [];
+        };
+        const flushList = () => { list = null; };
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (!line.trim()) { flushParagraph(); flushList(); continue; }
+          if (/^\s*\$\$\s*$/.test(line)) {
+            flushParagraph(); flushList();
+            const equation = [];
+            while (++i < lines.length && !/^\s*\$\$\s*$/.test(lines[i])) equation.push(lines[i]);
+            const block = document.createElement("div");
+            block.className = "math-block";
+            block.textContent = equation.join("\n");
+            parent.append(block);
+            continue;
+          }
+          const heading = line.match(/^\s*(#{1,6})\s+(.+)$/);
+          if (heading) {
+            flushParagraph(); flushList();
+            const element = document.createElement(`h${Math.min(heading[1].length + 2, 6)}`);
+            appendInline(element, heading[2]);
+            parent.append(element);
+            continue;
+          }
+          const item = line.match(/^\s*(?:[-*]\s+|\d+[.)]\s+)(.+)$/);
+          if (item) {
+            flushParagraph();
+            const ordered = /^\s*\d/.test(line);
+            if (!list || list.tagName !== (ordered ? "OL" : "UL")) {
+              list = document.createElement(ordered ? "OL" : "UL");
+              parent.append(list);
+            }
+            const li = document.createElement("li");
+            appendInline(li, item[1]);
+            list.append(li);
+            continue;
+          }
+          flushList();
+          if (/^\s*[-*_]{3,}\s*$/.test(line)) { flushParagraph(); parent.append(document.createElement("hr")); continue; }
+          paragraph.push(line.trim());
+        }
+        flushParagraph();
+      }
+
       async function compare() {
         const run_ids = selectedIds();
         if (run_ids.length < 2 || run_ids.length > 4) return;
@@ -179,19 +273,33 @@
           const meta = byId("comparison-meta");
           meta.replaceChildren();
           addText(meta, "p", data.comparable ? "Matched settings across these runs." : `Settings differ: ${(data.comparison_mismatches || []).join(", ")}. Read as a diagnostic comparison.`);
+          const progress = byId("comparison-progress");
+          progress.replaceChildren();
+          progress.hidden = !data.total_tests;
+          addText(progress, "strong", `Showing tests ${data.showing_from}–${data.showing_to} of ${data.total_tests}`);
+          if (data.next_test) {
+            const next = document.createElement("p");
+            const label = document.createElement("b"); label.textContent = `Next test: ${data.next_test.test_id}`;
+            next.append(label, document.createTextNode(data.next_test.question ? ` — ${data.next_test.question}` : ""));
+            progress.append(next);
+          } else if (data.total_tests) addText(progress, "p", "You are viewing the last tests in this comparison.");
           const root = byId("cases");
           root.replaceChildren();
           for (const test of data.tests || []) {
             const card = document.createElement("article");
             card.className = "case";
-            addText(card, "h3", test.test_id);
-            addText(card, "p", test.question);
+            addText(card, "h3", `Test ${test.test_id}`);
+            addText(card, "p", test.question, "case-question");
             const answers = document.createElement("div");
             answers.className = "answers";
             test.runs.forEach((run, index) => {
               const section = document.createElement("section");
-              addText(section, "strong", run ? `${run.model} (${run.run_id})` : `Missing result · ${run_ids[index]}`);
-              addText(section, "pre", run ? (run.output || run.error?.type || "No visible response") : "No result for this test.");
+              section.className = "answer";
+              addText(section, "h4", run ? `${run.model} · ${run.run_id}` : `Missing result · ${run_ids[index]}`);
+              const output = document.createElement("div"); output.className = "answer-content";
+              if (run) renderMarkdown(output, run.output || run.error?.type || "No visible response");
+              else addText(output, "p", "No result for this test.");
+              section.append(output);
               answers.append(section);
             });
             card.append(answers);

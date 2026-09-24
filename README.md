@@ -272,15 +272,21 @@ the hosted owner page, write it locally:
 
     python scripts/publish_run.py 20260922_104435_c7a061 --write-archive .api-data/publish-ready/20260922_104435_c7a061.zip
 
+To opt in to including the exact rendered system prompt in the private run
+archive, add `--include-system-prompt` when creating it. The owner can then
+enable **Include system prompt** when making a share. Student profiles are
+still excluded from hosted uploads.
+
 Before upload, the publisher removes `metadata.thinking` from the archived
 `results.jsonl`. The local source results remain unchanged. The shared archive
 keeps the final answer, question, and generation metadata used by the review UI.
 
 Open the deployed reviewer page with the owner token and upload the ZIP from
 **Publish benchmark runs**. The owner-only API uses Vercel's database and Blob
-secrets directly. Uploads are limited to 4 MB and exclude prompt/profile files,
-local filesystem paths, and `metadata.thinking`. The local archive remains in
-the ignored `.api-data/` directory until you remove it.
+secrets directly. Uploads are limited to 4 MB and exclude profiles, local
+filesystem paths, and `metadata.thinking`. Prompts are excluded unless you
+explicitly add `--include-system-prompt`. The local archive remains in the
+ignored `.api-data/` directory until you remove it.
 
 ### Serve published runs
 

@@ -198,6 +198,15 @@ def compare_runs(run_ids: list[str], offset: int, limit: int) -> dict[str, Any]:
         "offset": offset,
         "limit": limit,
         "total_tests": len(aligned),
+        "showing_from": offset + 1 if aligned[offset : offset + limit] else 0,
+        "showing_to": min(offset + limit, len(aligned)),
+        "next_test": (
+            {
+                "test_id": aligned[offset + limit]["test_id"],
+                "question": aligned[offset + limit]["question"],
+            }
+            if offset + limit < len(aligned) else None
+        ),
         "tests": aligned[offset : offset + limit],
     }
 

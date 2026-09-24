@@ -154,7 +154,7 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   strips `metadata.thinking` and machine-specific paths, and writes via the
   deployment's configured private Blob and PostgreSQL credentials.
 - Added an owner-only upload control to the review page. Share credentials
-  cannot publish. Prompts and student profiles remain unsupported in upload ZIPs.
+  cannot publish. Student profiles remain excluded; prompts are opt-in.
 - Added `--write-archive PATH` to `scripts/publish_run.py` to create sanitized
   ZIPs for the page. Updated API plan/deployment/README docs and corrected this
   file's record of Vercel CLI linking and secret limitations.
@@ -170,3 +170,22 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   uploaded because the owner token is intentionally hidden from local CLI and
   is available only to the user in the browser/Vercel dashboard. Next: user
   enters owner token in the deployed page and uploads archives.
+
+## Review UI clarity phase (in progress)
+
+- User reported that model output Markdown was shown as raw text and the
+  comparison pagination did not make the current and upcoming tests clear.
+- Added a progress banner showing the test range on the current page and the
+  next test ID/question. Renamed paging controls to say they move by 10 tests.
+- Added safe browser-side formatting for common Markdown: headings, bold,
+  italics, ordered/unordered lists, inline code, and visibly separated math
+  notation. Uses DOM text nodes/elements rather than injecting model HTML.
+- Clarified the owner share controls: a share is a selected-run, read-only link;
+  168 hours is seven days; other reviewers use the generated link and do not
+  need the owner's OpenSSL token. Profile sharing is disabled in hosted uploads.
+- System prompts are currently not in uploaded run archives. Added opt-in
+  support for `--include-system-prompt`, with the prompt still private unless
+  selected when creating a share. Existing runs must be republished with that
+  flag before the system prompt checkbox can work for them.
+- Changes are local and awaiting review. No deployment or additional prompt
+  upload has occurred.
