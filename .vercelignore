@@ -1,0 +1,23 @@
+# Only the API, its static review page, and runtime dependencies belong in the
+# deployment. Benchmark source data and fine-tuning materials stay private.
+.git/
+.venv/
+.api-data/
+results/
+scoring/
+datasets/
+prompts/
+config/
+scripts/
+niera_benchmark/
+outputs/
+finetune/
+*.jsonl
+*.csv
+*.parquet
+NIERA_FINETUNE_PROGRESS.md
+NIERA_QWEN3_FINETUNE_PLAN.md
+NIERA_BENCHMARK_RESEARCH_AND_PIPELINE_README.md
+API_PROGRESS.md
+API_ACCESS_PLAN.md
+README.md

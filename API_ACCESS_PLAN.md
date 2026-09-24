@@ -92,11 +92,13 @@ stable part. Support JSON responses and a downloadable JSONL export.
   `228b747`.
   PostgreSQL stores the run catalog and share credentials; a controlled command
   publishes allowlisted run files to private Vercel Blob storage.
-- **Phase 4, remote reads and comparison UI:** implemented for review. The API
+- **Phase 4, remote reads and comparison UI:** implemented and committed as
+  `48a1105`. The API
   reads the published catalog/archives, compares by test ID, exports results,
   and serves a small reviewer page for owner and share credentials.
-- **Phase 5, Vercel deployment:** deploy only after storage, access control,
-  and artifact exclusions are in place.
+- **Phase 5, Vercel deployment:** entry point and safe deployment exclusions
+  are prepared. Live deployment still requires an authenticated Vercel project
+  and configured PostgreSQL/Blob storage.
 
 ## Proposed endpoints
 
