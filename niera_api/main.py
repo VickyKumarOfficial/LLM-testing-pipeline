@@ -4,10 +4,14 @@ import hmac
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from pydantic import BaseModel, Field
+
+from niera_api import shares
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,6 +39,27 @@ def require_api_token(authorization: str | None = Header(default=None)) -> None:
             detail="Valid bearer token required",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def require_share(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "share" or not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Valid share credential required",
+            headers={"WWW-Authenticate": "Share"},
+        )
+    share = shares.find_share_by_token(token)
+    if share is None:
+        raise HTTPException(status_code=401, detail="Share credential is invalid or expired")
+    return share
+
+
+class CreateShareRequest(BaseModel):
+    run_ids: list[str] = Field(min_length=1, max_length=20)
+    expires_in_hours: int | None = Field(default=168, ge=1, le=8760)
+    allow_system_prompt: bool = False
+    allow_profile: bool = False
 
 
 def run_directory(run_id: str) -> Path:
@@ -245,6 +270,140 @@ def get_profile(run_id: str) -> dict[str, Any]:
     if not artifact_enabled("profile"):
         raise HTTPException(status_code=403, detail="Profile sharing is disabled")
     path = run_directory(run_id) / "student_profile.json"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Profile artifact not found")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(status_code=500, detail="Profile artifact is unreadable") from None
+
+
+@app.get("/api/v1/shares", dependencies=[Depends(require_api_token)])
+def list_shares() -> dict[str, Any]:
+    return {"shares": shares.list_shares()}
+
+
+@app.post("/api/v1/shares", dependencies=[Depends(require_api_token)])
+def create_share(request: CreateShareRequest) -> dict[str, Any]:
+    run_ids = list(dict.fromkeys(request.run_ids))
+    if len(run_ids) != len(request.run_ids):
+        raise HTTPException(status_code=422, detail="run_ids must not contain duplicates")
+    for run_id in run_ids:
+        run_directory(run_id)
+    expires_at = (
+        time.time() + request.expires_in_hours * 3600
+        if request.expires_in_hours is not None
+        else None
+    )
+    record, token = shares.create_share(
+        run_ids=run_ids,
+        allow_system_prompt=request.allow_system_prompt,
+        allow_profile=request.allow_profile,
+        expires_at=expires_at,
+    )
+    # The raw credential is returned once. Only its hash is stored.
+    return {**record, "share_token": token}
+
+
+@app.delete("/api/v1/shares/{share_id}", dependencies=[Depends(require_api_token)])
+def delete_share(share_id: str) -> dict[str, str]:
+    if not shares.revoke_share(share_id):
+        raise HTTPException(status_code=404, detail="Share not found")
+    return {"status": "revoked"}
+
+
+def verify_run_scope(share: dict[str, Any], run_id: str) -> Path:
+    if run_id not in share["run_ids"]:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run_directory(run_id)
+
+
+@app.get("/api/v1/shared/runs")
+def list_shared_runs(share: dict[str, Any] = Depends(require_share)) -> dict[str, Any]:
+    runs = []
+    for run_id in share["run_ids"]:
+        try:
+            manifest = read_manifest(run_directory(run_id))
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                continue
+            raise
+        runs.append(safe_run_summary(manifest))
+    return {"runs": runs, "count": len(runs)}
+
+
+@app.get("/api/v1/shared/runs/{run_id}")
+def get_shared_run(
+    run_id: str, share: dict[str, Any] = Depends(require_share)
+) -> dict[str, Any]:
+    return safe_run_summary(read_manifest(verify_run_scope(share, run_id)))
+
+
+@app.get("/api/v1/shared/runs/{run_id}/results")
+def list_shared_results(
+    run_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    test_id: str | None = None,
+    track: str | None = None,
+    subject: str | None = None,
+    difficulty: str | None = None,
+    share: dict[str, Any] = Depends(require_share),
+) -> dict[str, Any]:
+    path = verify_run_scope(share, run_id)
+    rows = read_results(path)
+    filtered = []
+    for row in rows:
+        test = row.get("test") or {}
+        if test_id and row.get("test_id") != test_id:
+            continue
+        if track and test.get("track") != track:
+            continue
+        if subject and test.get("subject") != subject:
+            continue
+        if difficulty and test.get("difficulty") != difficulty:
+            continue
+        filtered.append(public_result(row))
+    return {
+        "run_id": run_id,
+        "offset": offset,
+        "limit": limit,
+        "total": len(filtered),
+        "results": filtered[offset : offset + limit],
+    }
+
+
+@app.get("/api/v1/shared/runs/{run_id}/results/{test_id}")
+def get_shared_result(
+    run_id: str,
+    test_id: str,
+    share: dict[str, Any] = Depends(require_share),
+) -> dict[str, Any]:
+    for row in read_results(verify_run_scope(share, run_id)):
+        if row.get("test_id") == test_id:
+            return public_result(row)
+    raise HTTPException(status_code=404, detail="Result not found")
+
+
+@app.get("/api/v1/shared/runs/{run_id}/artifacts/system-prompt")
+def get_shared_system_prompt(
+    run_id: str, share: dict[str, Any] = Depends(require_share)
+) -> Response:
+    if not share["artifacts"]["system_prompt"]:
+        raise HTTPException(status_code=404, detail="Artifact not shared")
+    path = verify_run_scope(share, run_id) / "system_prompt.rendered.txt"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Prompt artifact not found")
+    return Response(path.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
+
+
+@app.get("/api/v1/shared/runs/{run_id}/artifacts/profile")
+def get_shared_profile(
+    run_id: str, share: dict[str, Any] = Depends(require_share)
+) -> dict[str, Any]:
+    if not share["artifacts"]["profile"]:
+        raise HTTPException(status_code=404, detail="Artifact not shared")
+    path = verify_run_scope(share, run_id) / "student_profile.json"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Profile artifact not found")
     try:

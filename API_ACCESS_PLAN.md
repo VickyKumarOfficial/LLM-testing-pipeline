@@ -81,11 +81,13 @@ stable part. Support JSON responses and a downloadable JSONL export.
 
 ## Implementation checkpoints
 
-- **Phase 1, local read-only API:** completed for review. The API requires a
+- **Phase 1, local read-only API:** completed and committed. The API requires a
   bearer token and reads completed local runs. Prompt/profile downloads default
-  to disabled. It has no sharing links or external storage yet.
-- **Phase 2, review and access model:** after Phase 1 review, choose the final
-  share policy and implement per-share permissions and expiry/revocation.
+  to disabled.
+- **Phase 2, scoped shares:** implemented locally for review. Owner creates
+  per-run read-only credentials with expiry and optional prompt/profile access;
+  owner can list and revoke them. Credentials are sent in the `Authorization:
+  Share` header. SQLite is local development storage only.
 - **Phase 3, persistent storage and publish flow:** add the run index and a
   controlled artifact upload/import path.
 - **Phase 4, compare/export UI:** align runs by test ID and provide reviewer
@@ -109,6 +111,17 @@ All routes are under `/api/v1` and require HTTPS.
 | `POST /comparisons` | Compare two or more accessible run IDs. Return aligned per-test outputs and operational metrics. |
 | `POST /shares` | Owner creates a read-only share for selected run IDs. Return a high-entropy share link/token with optional expiry. |
 | `DELETE /shares/{share_id}` | Owner revokes a share. |
+
+Owner share management currently uses `GET`, `POST`, and `DELETE
+/api/v1/shares...` with the owner bearer token. Shared reads use
+`Authorization: Share <token>` on `/api/v1/shared/runs...` routes. They expose
+only the run IDs and artifact classes recorded on that share.
+
+The first implementation uses `/api/v1/shares` and
+`/api/v1/shared/runs/...`. It returns a one-time share credential rather than a
+browser URL. The reviewer UI can place the credential in a URL fragment and
+send it in the authorization header; the secret should not be sent as a query
+parameter or path segment where server logs may capture it.
 
 Keep score access out of the first release until the rubric is filled and the
 team agrees that scores and evaluator notes may be shared. When added, expose

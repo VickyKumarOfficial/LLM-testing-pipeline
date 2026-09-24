@@ -234,3 +234,27 @@ This local server is for development on this machine. It is not reachable from
 the public internet by default. Do not bind it to a public interface or deploy
 the repository as a public static site. Remote sharing needs the later hosting,
 private storage, and share-link phases in `API_ACCESS_PLAN.md`.
+
+### Create and use a scoped share credential
+
+The owner can create a share for up to 20 completed run IDs. A share expires in
+one week by default. Prompt and profile access are opt-in:
+
+    curl -X POST http://127.0.0.1:8000/api/v1/shares \
+      -H "Authorization: Bearer $NIERA_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"run_ids":["20260922_172853_2f88de"],"expires_in_hours":168}'
+
+The response contains `share_token`. Save it when returned, since the service
+stores only its hash. A reviewer uses it as an authorization credential, not
+as a URL:
+
+    curl -H "Authorization: Share <share_token>" \
+      http://127.0.0.1:8000/api/v1/shared/runs
+
+Reviewers can only see the selected runs. Prompt/profile artifact permission is
+off unless `allow_system_prompt` or `allow_profile` is set when creating the
+share. Owners can list share records at `GET /api/v1/shares` and revoke
+one at `DELETE /api/v1/shares/{share_id}`. Expired or revoked credentials stop
+authorizing requests. A browser-friendly share URL will be added with the
+reviewer UI, and hosted persistence is required before Vercel deployment.
