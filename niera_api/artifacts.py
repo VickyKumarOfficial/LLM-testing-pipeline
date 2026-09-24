@@ -79,20 +79,19 @@ def _fetch_remote_archive(blob_path: str) -> bytes:
         except ImportError as exc:
             raise HTTPException(status_code=503, detail="Vercel Blob SDK is unavailable") from exc
         try:
-            client = AsyncBlobClient()
-            result = await client.get(blob_path, access="private")
+            async with AsyncBlobClient() as client:
+                result = await client.get(blob_path, access="private")
         except Exception:
             raise HTTPException(status_code=502, detail="Could not read published run") from None
-        if result is None or result.status_code != 200 or result.stream is None:
+        if result is None or result.status_code != 200:
             raise HTTPException(status_code=404, detail="Published run artifact not found")
-        chunks = []
-        total = 0
-        async for chunk in result.stream:
-            total += len(chunk)
-            if total > MAX_ARCHIVE_BYTES:
-                raise HTTPException(status_code=413, detail="Published run archive is too large")
-            chunks.append(chunk)
-        return b"".join(chunks)
+        # Vercel Blob SDK returns the body in `content` bytes, not as a stream.
+        content = getattr(result, "content", None)
+        if not isinstance(content, bytes):
+            raise HTTPException(status_code=502, detail="Published run artifact response is invalid")
+        if len(content) > MAX_ARCHIVE_BYTES:
+            raise HTTPException(status_code=413, detail="Published run archive is too large")
+        return content
 
     return asyncio.run(fetch())
 
