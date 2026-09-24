@@ -95,34 +95,6 @@ results as the baseline record.
 - The Sep 24 Qwen diagnostic rerun has only two result lines and uses a changed
   token budget/context. It is not included in this matched comparison.
 
-### 2026-09-24 — API sharing plan
-
-- Reviewed the current artifact schema in `run_benchmark.py`, `niera_benchmark/io.py`,
-  the run manifests, and existing scoring files.
-- Added `API_ACCESS_PLAN.md` with a read-only FastAPI service proposal, endpoint
-  list, invited share-link access, artifact handling, comparison rules, and
-  deployment order.
-- Security/data issue identified: run artifacts contain full model outputs,
-  product system prompt snapshots, student profiles, source-linked questions,
-  and there is an unblinding scoring key. The plan restricts sharing by artifact
-  class and keeps scoring keys/private notes owner-only.
-- No API code, dependency, deployment, or remote service was created. The next
-  implementation decision is to approve the artifact sharing policy, especially
-  system prompt/profile exposure, before building endpoints.
-- Clarified hosting behavior: remote access requires the API to run on a publicly
-  reachable host. If run on the laptop, it must remain online and awake; for
-  ongoing sharing deploy the API and saved artifacts to an always-available
-  host. The model/Ollama process can remain off because the API serves saved
-  benchmark artifacts only. Added this distinction and a warning against
-  exposing the Ollama/development port directly to `API_ACCESS_PLAN.md`.
-- Checked current official Vercel documentation. Python Functions support
-  FastAPI (runtime marked beta); function filesystems are read-only apart from
-  temporary `/tmp`. Vercel can host the API/UI while the laptop stays off, but
-  run records and share permissions should live in a hosted database and
-  approved artifacts in private object storage, rather than relying on function
-  filesystem writes. Added Vercel deployment guidance and a warning not to
-  publish the repository root or scoring/private artifacts as static files.
-
 ## Issue log
 
 | Date | Issue | Resolution / next action | Status |
@@ -131,9 +103,6 @@ results as the baseline record.
 | 2026-09-24 | Plan says two existing runs, while the rubric includes three complete runs (168 rows total). | Follow the prepared scoring package and include its three keyed runs; verify the key before unblinding. | Open |
 | 2026-09-24 | Latest Qwen rerun is incomplete and uses a changed generation budget. | Treat it as diagnostic only; do not mix with the original matched 56-test comparison. | Resolved for baseline handling |
 | 2026-09-24 | User asked which model is better by subject/behavior, but there are no human quality scores yet. | Report operational differences from manifests and defer educational-quality ranking until blinded scoring is complete. | Open |
-| 2026-09-24 | Internet sharing would expose prompts, profiles, benchmark content, outputs, and a private scoring key if artifacts were served indiscriminately. | API plan makes sharing read-only and scoped; prompt/profile inclusion is explicit; key and reviewer notes remain owner-only. | Resolved in plan; implementation policy to confirm |
-| 2026-09-24 | API source code alone does not make the service reachable from another network, and laptop-hosted access depends on power/network uptime. | Added local-demo vs always-on hosting requirements; recommend deploying API plus artifacts for reliable sharing. | Resolved in plan |
-| 2026-09-24 | Vercel Functions cannot act as a persistent writable filesystem for benchmark artifacts. | Plan uses Vercel as API/UI compute and separate hosted DB plus private object storage for data. | Resolved in plan |
 
 ## Progress history
 
@@ -141,4 +110,3 @@ results as the baseline record.
 |---|---|---|
 | 2026-09-24 | Inspected repository structure, fine-tuning plan, benchmark README, scoring artifacts, result directories, and generation configs. | Phase 0 is the first active task; baseline scoring is prepared but untouched. |
 | 2026-09-24 | Compared all three complete benchmark run manifests and performance summaries. | Gemma is the operational completion/consistency leader; Llama is the latency/conciseness leader; Qwen shows reasoning but has four thinking-only responses. Quality ranking awaits manual scoring. |
-| 2026-09-24 | Drafted a basic internet API and sharing plan based on the existing artifacts. | See `API_ACCESS_PLAN.md`; awaiting implementation request and artifact-sharing policy decision. |

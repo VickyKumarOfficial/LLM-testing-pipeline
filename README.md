@@ -209,3 +209,28 @@ challenge the false premise?) rather than on style.
 The benchmark core must remain independent of the inference backend. Ollama is
 the first backend. A Colab/Transformers backend, or the Niera Pipeline N
 backend, can be added without changing the dataset, prompts or result schema.
+
+## Read-only results API
+
+The initial API serves saved runs only. It does not call Ollama or run inference.
+Install the requirements above, set a private bearer token, and start the local
+server:
+
+    export NIERA_API_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    uvicorn niera_api.main:app --host 127.0.0.1 --port 8000
+
+Send `Authorization: Bearer <token>` to protected routes. For example:
+
+    curl -H "Authorization: Bearer $NIERA_API_TOKEN" \
+      http://127.0.0.1:8000/api/v1/runs
+
+Available routes are listed at `http://127.0.0.1:8000/docs`. The health route is
+`GET /api/v1/health`; protected routes list runs, return run metadata, and
+provide filtered/paginated outputs. System prompt and student profile downloads
+are disabled unless the server owner explicitly sets
+`NIERA_API_EXPOSE_SYSTEM_PROMPT=true` or `NIERA_API_EXPOSE_PROFILE=true`.
+
+This local server is for development on this machine. It is not reachable from
+the public internet by default. Do not bind it to a public interface or deploy
+the repository as a public static site. Remote sharing needs the later hosting,
+private storage, and share-link phases in `API_ACCESS_PLAN.md`.

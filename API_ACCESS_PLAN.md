@@ -79,6 +79,20 @@ filesystem paths from API callers.
 The first viewer can be a basic web page that calls this API, but the API is the
 stable part. Support JSON responses and a downloadable JSONL export.
 
+## Implementation checkpoints
+
+- **Phase 1, local read-only API:** completed for review. The API requires a
+  bearer token and reads completed local runs. Prompt/profile downloads default
+  to disabled. It has no sharing links or external storage yet.
+- **Phase 2, review and access model:** after Phase 1 review, choose the final
+  share policy and implement per-share permissions and expiry/revocation.
+- **Phase 3, persistent storage and publish flow:** add the run index and a
+  controlled artifact upload/import path.
+- **Phase 4, compare/export UI:** align runs by test ID and provide reviewer
+  downloads.
+- **Phase 5, Vercel deployment:** deploy only after storage, access control,
+  and artifact exclusions are in place.
+
 ## Proposed endpoints
 
 All routes are under `/api/v1` and require HTTPS.
