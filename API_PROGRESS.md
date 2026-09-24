@@ -111,9 +111,9 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   profile files, and the publisher now strips `metadata.thinking`.
   Next: confirm remote mode is active in Production, then publish approved run
   IDs to the linked Postgres and private Blob store.
-  Vercel CLI 60.0.0 is available through `npm exec`, but `vercel whoami` reports
-  the local CLI token is invalid, so publishing from this workspace requires
-  `vercel login` and linking the project. No artifacts were uploaded.
+  Vercel CLI 60.0.0 was available through `npm exec`; user has since linked the
+  project. Sensitive Production values remain unavailable to local CLI env
+  commands, so no artifacts have been uploaded.
 - User identified a Qwen retry folder (`20260924_134826_3d2d7f`) for two of the
   original empty cases. `MATH-JEE-02` has a 1,897-character answer;
   `PHY-NC-03` remains empty. The other original empty cases,
@@ -134,11 +134,32 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 | 2026-09-24 | Fine-tuning progress log included API work. | Removed API entries from `NIERA_FINETUNE_PROGRESS.md`; use this file for API work. | Resolved |
 | 2026-09-24 | Share credentials could leak if placed in request paths or query strings. | Reviewer UI keeps them in the URL fragment and sends them in an authorization header. | Resolved in Phase 4 |
 | 2026-09-24 | Hosted catalog/blob artifacts were not used by read endpoints after Phase 3. | Added remote read adapter in Phase 4; Vercel deployment is still pending. | Resolved for API reads |
-| 2026-09-24 | No authenticated Vercel CLI project link was available in the workspace. | User created the Vercel project and connected Neon and private Blob storage through the dashboard. Vercel CLI is available, but its local auth token is invalid; login and project linking remain. | In progress |
+| 2026-09-24 | Local CLI cannot read Vercel's sensitive database/Blob environment values. | Added an owner-token-protected upload endpoint. Vercel's deployed function writes with its own secrets; share links remain read-only. | Implemented locally; deployment pending |
 | 2026-09-24 | User needed help interpreting the deployed review page fields. | Inspected the production page and API schema; documented owner/share credential use and optional share fields. No credential values were accessed. | Resolved |
 | 2026-09-24 | Owner credential was reported as invalid/expired and its Vercel value is hidden. | The Vercel value is hidden by design. User replaced the value and the owner page now accepts it. | Resolved |
 | 2026-09-24 | Hosted review page reports 0 runs. | Identified that run artifacts are still local. Validated three completed runs and one Qwen retry subset in dry-run. No data was uploaded; publishing remains. | In progress |
 | 2026-09-24 | Publisher dry-run initially lacked FastAPI in the active virtualenv. | Installed `requirements.txt` into the existing `.venv`; dry-run then validated all four publish records. Upload has not been performed. | Resolved |
-| 2026-09-24 | Local Vercel CLI authentication is invalid. | `npm exec` provides Vercel CLI 60.0.0, but `vercel whoami` requires a fresh login and project link before publisher can access hosted environment variables. | Open |
+| 2026-09-24 | The local publisher cannot access hosted database and Blob secrets even after CLI linking. | Confirmed Vercel withholds sensitive values from local environment commands. Added browser upload through the deployed API, which uses Vercel's runtime credentials. | Implemented locally; deploy pending |
 | 2026-09-24 | Qwen rerun covered only two of four empty outputs and used a different token/context configuration. | Kept the original run unchanged and added a two-test partial-retry manifest. It records one recovered response and one remaining empty response, with the changed configuration visible. | Prepared locally |
 | 2026-09-24 | Raw result archives would have included model `metadata.thinking`. | Publisher now strips this field from the upload archive while preserving local originals and fields needed for review. Dry-run archive inspection confirmed it is absent. | Resolved locally; deployment pending |
+
+## Owner upload phase (in progress)
+
+- User confirmed the Vercel CLI link is complete. CLI link alone does not make
+  sensitive Production values readable locally, so the CLI publisher cannot
+  connect directly to hosted PostgreSQL/Blob without exposing secrets.
+- Added `POST /api/v1/publish`, protected by the owner bearer token. It accepts
+  an `application/zip` body up to 4 MB, validates archive names/run ID/count,
+  strips `metadata.thinking` and machine-specific paths, and writes via the
+  deployment's configured private Blob and PostgreSQL credentials.
+- Added an owner-only upload control to the review page. Share credentials
+  cannot publish. Prompts and student profiles remain unsupported in upload ZIPs.
+- Added `--write-archive PATH` to `scripts/publish_run.py` to create sanitized
+  ZIPs for the page. Updated API plan/deployment/README docs and corrected this
+  file's record of Vercel CLI linking and secret limitations.
+- Code and docs compiled cleanly and `git diff --check` passed. Prepared four
+  ignored local ZIPs: three full runs and the two-question Qwen retry subset;
+  each is below the 4 MB upload cap. Nothing has been uploaded.
+- Committed this development phase as `cce4682` (`Add owner upload flow for
+  hosted benchmark runs`). Production has not been redeployed. Stop for review;
+  after review, redeploy and publish the approved archives.

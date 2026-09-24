@@ -261,37 +261,32 @@ reviewer UI, and hosted persistence is required before Vercel deployment.
 
 ### Publish a run to hosted storage
 
-Phase 3 adds a controlled publisher. Create a PostgreSQL database and a **private**
-Vercel Blob store, then configure `DATABASE_URL` and
-`BLOB_READ_WRITE_TOKEN` in the environment. First inspect exactly what would be
-uploaded:
+Create a PostgreSQL database and a **private** Vercel Blob store, then set the
+database, Blob token, storage mode, and owner token in Vercel. Inspect the local
+archive contents first:
 
     python scripts/publish_run.py 20260922_172853_2f88de --dry-run
 
-The publisher validates that the manifest and every result row match the run,
-and that the result count equals `test_count`. It includes only run metadata,
-results, and performance summaries by default. To deliberately include sensitive
-snapshots, add `--include-system-prompt` or `--include-profile`.
+The publisher validates the manifest and result rows. To prepare an archive for
+the hosted owner page, write it locally:
+
+    python scripts/publish_run.py 20260922_104435_c7a061 --write-archive .api-data/publish-ready/20260922_104435_c7a061.zip
 
 Before upload, the publisher removes `metadata.thinking` from the archived
 `results.jsonl`. The local source results remain unchanged. The shared archive
 keeps the final answer, question, and generation metadata used by the review UI.
 
-After reviewing the dry-run report, publish with:
-
-    python scripts/publish_run.py 20260922_172853_2f88de
-
-The script stores the ZIP in private Blob storage and indexes its path, manifest,
-artifact list, digest, and publish status in PostgreSQL. It never uploads the
-scoring sheet/key or dataset directory. Set the API to remote mode to serve the
-published runs through the catalog and private blobs.
+Open the deployed reviewer page with the owner token and upload the ZIP from
+**Publish benchmark runs**. The owner-only API uses Vercel's database and Blob
+secrets directly. Uploads are limited to 4 MB and exclude prompt/profile files,
+local filesystem paths, and `metadata.thinking`. The local archive remains in
+the ignored `.api-data/` directory until you remove it.
 
 ### Serve published runs
 
-The remote-read mode and reviewer page use published archives. To run the API
-against a published archive, set `NIERA_API_STORAGE_BACKEND=remote` along with
-`DATABASE_URL` and the Blob credentials available to the Vercel Python SDK, then
-start the API as usual. The API reads only records marked `published`; failed or
+The remote-read mode and reviewer page use published archives. Set
+`NIERA_API_STORAGE_BACKEND=remote` along with `DATABASE_URL` and the Blob token
+in Vercel. The API reads only records marked `published`; failed or
 in-progress uploads stay hidden. Keep `NIERA_API_STORAGE_BACKEND=local` for the
 repository-backed development view.
 

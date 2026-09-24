@@ -113,6 +113,7 @@ All routes are under `/api/v1` and require HTTPS.
 | `GET /runs/{run_id}/artifacts/system-prompt` | Exact rendered system prompt snapshot, with content type text/plain and hash metadata. |
 | `GET /runs/{run_id}/artifacts/profile` | Student profile snapshot used for the run. |
 | `GET /runs/{run_id}/export` | Download sanitized JSONL or a ZIP with run metadata, outputs, and performance summaries. Owner prompt/profile inclusion is controlled by server settings. |
+| `POST /publish` | Owner-only upload of a sanitized run ZIP (maximum 4 MB) into private Blob storage and the hosted catalog. Share credentials cannot publish. |
 | `POST /comparisons` | Compare two to four accessible runs, aligned by test ID. Reports mismatched settings and does not choose a quality winner. |
 | `POST /shares` | Owner creates a read-only share for selected run IDs. Return a high-entropy share link/token with optional expiry. |
 | `DELETE /shares/{share_id}` | Owner revokes a share. |

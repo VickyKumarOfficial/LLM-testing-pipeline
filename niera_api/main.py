@@ -9,16 +9,16 @@ from pathlib import Path
 import zipfile
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from niera_api import artifacts, shares
+from niera_api import artifacts, publishing, shares
 
 app = FastAPI(
     title="Niera benchmark API",
     version="1.0.0",
-    description="Read-only access to saved Niera benchmark runs.",
+    description="Owner-managed publishing and read-only access to saved Niera benchmark runs.",
 )
 
 
@@ -237,6 +237,27 @@ def make_export(run_id: str, include_prompt: bool, include_profile: bool) -> byt
 def health() -> dict[str, str]:
     """Liveness only. Does not reveal configuration or require a token."""
     return {"status": "ok"}
+
+
+@app.post("/api/v1/publish", dependencies=[Depends(require_api_token)])
+async def publish_run_archive(request: Request) -> dict[str, Any]:
+    """Publish a validated ZIP archive using the deployment's private credentials."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > publishing.MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Run archive exceeds the 4 MB upload limit")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from None
+    content = await request.body()
+    if len(content) > publishing.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Run archive exceeds the 4 MB upload limit")
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/zip":
+        raise HTTPException(status_code=415, detail="Content-Type must be application/zip")
+    try:
+        return publishing.publish_archive(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @app.get("/api/v1/runs", dependencies=[Depends(require_api_token)])

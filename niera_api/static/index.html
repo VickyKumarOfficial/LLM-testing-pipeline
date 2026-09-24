@@ -69,6 +69,15 @@
     <p id="share-link"></p>
     <h3>Existing shares</h3>
     <div id="shares"></div>
+    <hr>
+    <h3>Publish benchmark runs</h3>
+    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner.</p>
+    <div class="row">
+      <label style="flex:1; min-width:260px">Run archives
+        <input id="run-archives" type="file" accept=".zip,application/zip" multiple>
+      </label>
+      <button id="publish-runs">Upload selected archives</button>
+    </div>
   </section>
 
   <section id="comparison">
@@ -252,12 +261,40 @@
         } catch (error) { notice(error.message); }
       }
 
+      async function publishRuns() {
+        if (state.scheme !== "Bearer") return;
+        const files = [...byId("run-archives").files];
+        if (!files.length) { notice("Choose one or more run ZIP archives first."); return; }
+        for (const file of files) {
+          if (file.size > 4 * 1024 * 1024) { notice(`${file.name} is larger than the 4 MB limit.`); return; }
+        }
+        const button = byId("publish-runs");
+        button.disabled = true;
+        const outcomes = [];
+        try {
+          for (const file of files) {
+            notice(`Uploading ${file.name}…`);
+            const response = await request("/publish", {
+              method: "POST",
+              headers: { "Content-Type": "application/zip" },
+              body: file,
+            });
+            const result = await response.json();
+            outcomes.push(`${result.run_id} (${result.test_count} tests)`);
+          }
+          await loadRuns();
+          notice(`Published ${outcomes.length} run(s): ${outcomes.join(", ")}.`);
+        } catch (error) { notice(error.message); }
+        finally { button.disabled = false; }
+      }
+
       byId("connect").addEventListener("click", loadRuns);
       byId("compare").addEventListener("click", compare);
       byId("previous").addEventListener("click", () => { state.offset = Math.max(0, state.offset - 10); compare(); });
       byId("next").addEventListener("click", () => { state.offset += 10; compare(); });
       byId("download").addEventListener("click", downloadRun);
       byId("create-share").addEventListener("click", createShare);
+      byId("publish-runs").addEventListener("click", publishRuns);
       byId("scheme").addEventListener("change", () => {
         byId("owner-tools").hidden = byId("scheme").value !== "Bearer";
         updateButtons();

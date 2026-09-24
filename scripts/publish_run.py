@@ -105,6 +105,21 @@ def make_archive(run_dir: Path, names: list[str]) -> tuple[bytes, str]:
                         row["metadata"] = metadata
                     sanitized_rows.append(json.dumps(row, ensure_ascii=False))
                 archive.writestr(name, "\n".join(sanitized_rows) + "\n")
+            elif name == "run.json":
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest.pop("profile_path", None)
+                dataset = manifest.get("dataset")
+                if isinstance(dataset, str):
+                    manifest["dataset"] = Path(dataset.replace("\\", "/")).name
+                archive.writestr(name, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+            elif name == "performance.json":
+                performance = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(performance, dict):
+                    performance.pop("profile_path", None)
+                    dataset = performance.get("dataset")
+                    if isinstance(dataset, str):
+                        performance["dataset"] = Path(dataset.replace("\\", "/")).name
+                archive.writestr(name, json.dumps(performance, ensure_ascii=False, indent=2) + "\n")
             else:
                 archive.write(path, arcname=name)
     content = buffer.getvalue()
@@ -153,6 +168,8 @@ def main() -> None:
                         help="Include the student profile (sensitive; opt in)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Validate and report archive contents without uploading")
+    parser.add_argument("--write-archive", type=Path,
+                        help="Write a sanitized ZIP for upload through the hosted owner page")
     args = parser.parse_args()
 
     try:
@@ -160,6 +177,23 @@ def main() -> None:
             args.run_id, args.include_system_prompt, args.include_profile
         )
         archive, digest = make_archive(run_dir, names)
+        if args.dry_run and args.write_archive:
+            raise ValueError("choose either --dry-run or --write-archive")
+        if args.write_archive:
+            if args.include_system_prompt or args.include_profile:
+                raise ValueError("hosted uploads do not accept system prompts or student profiles")
+            args.write_archive.parent.mkdir(parents=True, exist_ok=True)
+            args.write_archive.write_bytes(archive)
+            print(json.dumps({
+                "run_id": args.run_id,
+                "test_count": manifest["test_count"],
+                "artifacts": names,
+                "archive_bytes": len(archive),
+                "sha256": digest,
+                "archive": str(args.write_archive),
+                "uploaded": False,
+            }, indent=2))
+            return
         if args.dry_run:
             print(json.dumps({
                 "run_id": args.run_id,

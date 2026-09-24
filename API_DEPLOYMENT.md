@@ -38,18 +38,29 @@ and [deployment ignore rules](https://vercel.com/docs/deployments/vercel-ignore)
 
 ## Publish approved runs
 
-From a trusted local machine, configure `DATABASE_URL` and
-`BLOB_READ_WRITE_TOKEN`, then use the checked publisher documented in
-`README.md`. Run the `--dry-run` first and inspect the artifact list. Upload only
-approved run IDs. Prompt/profile snapshots require explicit publisher flags.
+Create a sanitized archive locally, then upload it from the deployed owner page.
+The Vercel function uses its own database and Blob credentials, so they do not
+need to be copied to the laptop. For example:
+
+```sh
+python scripts/publish_run.py 20260922_104435_c7a061 --dry-run
+python scripts/publish_run.py 20260922_104435_c7a061 --write-archive .api-data/publish-ready/20260922_104435_c7a061.zip
+```
+
+Open `/`, choose **Owner**, enter `NIERA_API_TOKEN`, load runs, then select the
+ZIP under **Publish benchmark runs**. The endpoint accepts archives up to 4 MB,
+validates the run manifest and results, removes internal `metadata.thinking`
+and local filesystem paths, and writes the sanitized archive to private Blob
+storage and its catalog record to PostgreSQL. It rejects system prompt and
+student profile files. `--dry-run` does not upload anything.
 
 Remote API reads use only catalog entries marked `published`. They verify the
 archive digest before returning content. Share credentials and run metadata
 live in PostgreSQL; the result archive lives in private Blob storage.
 
-## Current setup limit
+## Current setup
 
-The repository is prepared for deployment, but no Vercel CLI is installed, no
-Vercel project is linked in `.vercel/`, and no database or Blob credentials are
-configured in this workspace. A live deployment therefore still needs an
-authenticated Vercel project and its storage integrations.
+The Vercel project, PostgreSQL integration, private Blob store, production
+deployment, and local Vercel CLI link have been configured. Vercel keeps its
+sensitive environment values unavailable to local `env pull` and `env run`
+commands. The owner upload page avoids exporting those secrets to the laptop.
