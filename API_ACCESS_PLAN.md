@@ -88,10 +88,11 @@ stable part. Support JSON responses and a downloadable JSONL export.
   per-run read-only credentials with expiry and optional prompt/profile access;
   owner can list and revoke them. Credentials are sent in the `Authorization:
   Share` header. SQLite is local development storage only.
-- **Phase 3, persistent storage and publish flow:** add the run index and a
-  controlled artifact upload/import path.
-- **Phase 4, compare/export UI:** align runs by test ID and provide reviewer
-  downloads.
+- **Phase 3, persistent storage and publish flow:** implemented for review.
+  PostgreSQL stores the run catalog and share credentials; a controlled command
+  publishes allowlisted run files to private Vercel Blob storage.
+- **Phase 4, remote reads and comparison UI:** connect the API to published
+  artifacts, align runs by test ID, and provide reviewer views/exports.
 - **Phase 5, Vercel deployment:** deploy only after storage, access control,
   and artifact exclusions are in place.
 

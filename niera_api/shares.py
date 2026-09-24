@@ -17,9 +17,31 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = Path(os.environ.get("NIERA_API_DB_PATH", str(ROOT / ".api-data" / "shares.sqlite3")))
+DATABASE_URL = os.environ.get("DATABASE_URL")
+PARAM = "%s" if DATABASE_URL else "?"
 
 
-def connect() -> sqlite3.Connection:
+def connect() -> Any:
+    if DATABASE_URL:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as exc:
+            raise RuntimeError("Install psycopg to use DATABASE_URL") from exc
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS shares (
+                share_id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL UNIQUE,
+                run_ids_json TEXT NOT NULL,
+                allow_system_prompt SMALLINT NOT NULL DEFAULT 0,
+                allow_profile SMALLINT NOT NULL DEFAULT 0,
+                created_at DOUBLE PRECISION NOT NULL,
+                expires_at DOUBLE PRECISION
+            )"""
+        )
+        conn.commit()
+        return conn
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -39,7 +61,7 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
-def metadata(row: sqlite3.Row) -> dict[str, Any]:
+def metadata(row: Any) -> dict[str, Any]:
     return {
         "share_id": row["share_id"],
         "run_ids": json.loads(row["run_ids_json"]),
@@ -65,10 +87,10 @@ def create_share(
     conn = connect()
     try:
         conn.execute(
-            """INSERT INTO shares
+            f"""INSERT INTO shares
             (share_id, token_hash, run_ids_json, allow_system_prompt,
              allow_profile, created_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            VALUES ({PARAM}, {PARAM}, {PARAM}, {PARAM}, {PARAM}, {PARAM}, {PARAM})""",
             (
                 share_id,
                 token_hash,
@@ -80,7 +102,9 @@ def create_share(
             ),
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM shares WHERE share_id = ?", (share_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT * FROM shares WHERE share_id = {PARAM}", (share_id,)
+        ).fetchone()
         return metadata(row), token
     finally:
         conn.close()
@@ -91,7 +115,7 @@ def find_share_by_token(token: str) -> dict[str, Any] | None:
     conn = connect()
     try:
         row = conn.execute(
-            "SELECT * FROM shares WHERE token_hash = ?", (token_hash,)
+            f"SELECT * FROM shares WHERE token_hash = {PARAM}", (token_hash,)
         ).fetchone()
         if row is None:
             return None
@@ -116,7 +140,9 @@ def list_shares() -> list[dict[str, Any]]:
 def revoke_share(share_id: str) -> bool:
     conn = connect()
     try:
-        cursor = conn.execute("DELETE FROM shares WHERE share_id = ?", (share_id,))
+        cursor = conn.execute(
+            f"DELETE FROM shares WHERE share_id = {PARAM}", (share_id,)
+        )
         conn.commit()
         return cursor.rowcount > 0
     finally:

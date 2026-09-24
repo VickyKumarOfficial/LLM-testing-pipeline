@@ -258,3 +258,27 @@ share. Owners can list share records at `GET /api/v1/shares` and revoke
 one at `DELETE /api/v1/shares/{share_id}`. Expired or revoked credentials stop
 authorizing requests. A browser-friendly share URL will be added with the
 reviewer UI, and hosted persistence is required before Vercel deployment.
+
+### Publish a run to hosted storage
+
+Phase 3 adds a controlled publisher. Create a PostgreSQL database and a **private**
+Vercel Blob store, then configure `DATABASE_URL` and
+`BLOB_READ_WRITE_TOKEN` in the environment. First inspect exactly what would be
+uploaded:
+
+    python scripts/publish_run.py 20260922_172853_2f88de --dry-run
+
+The publisher validates that the manifest and every result row match the run,
+and that the result count equals `test_count`. It includes only run metadata,
+results, and performance summaries by default. To deliberately include sensitive
+snapshots, add `--include-system-prompt` or `--include-profile`.
+
+After reviewing the dry-run report, publish with:
+
+    python scripts/publish_run.py 20260922_172853_2f88de
+
+The script stores the ZIP in private Blob storage and indexes its path, manifest,
+artifact list, digest, and publish status in PostgreSQL. It never uploads the
+scoring sheet/key or dataset directory. This Phase 3 publisher stores runs for
+future API reads; the current API still serves local files until Phase 4 connects
+it to the remote catalog and private blobs.
