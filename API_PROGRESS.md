@@ -142,6 +142,7 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 | 2026-09-24 | The local publisher cannot access hosted database and Blob secrets even after CLI linking. | Confirmed Vercel withholds sensitive values from local environment commands. Added browser upload through the deployed API, which uses Vercel's runtime credentials. | Implemented locally; deploy pending |
 | 2026-09-24 | Qwen rerun covered only two of four empty outputs and used a different token/context configuration. | Kept the original run unchanged and added a two-test partial-retry manifest. It records one recovered response and one remaining empty response, with the changed configuration visible. | Prepared locally |
 | 2026-09-24 | Raw result archives would have included model `metadata.thinking`. | Publisher now strips this field from the upload archive while preserving local originals and fields needed for review. Dry-run archive inspection confirmed it is absent. | Resolved locally; deployment pending |
+| 2026-09-25 | Downloading a published run returned HTTP 500 because the API expected a `.stream` attribute on the Vercel Blob SDK result. | Updated remote archive reads to use the SDK's `content` bytes, validate the response type and archive size, and close the async client. Deployed commit `5c2c5eb`; production page and API schema return HTTP 200. No post-deploy download request is present in Vercel logs yet, so the browser download still needs confirmation. | Fixed and deployed; awaiting user confirmation |
 
 ## Owner upload phase (in progress)
 
