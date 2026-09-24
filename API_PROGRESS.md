@@ -17,9 +17,9 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 - Phase 2: implemented and committed as `bfdf2d3`.
 - Phase 3: implemented and committed as `228b747`.
 - Phase 4: implemented and committed as `48a1105`.
-- Phase 5: deployment configuration prepared in the working tree. Live deploy
-  is pending an authenticated Vercel project and configured hosted storage.
-- Phases complete: 4/5. One phase remains.
+- Phase 5: Vercel project and stores are configured; the production reviewer
+  page is live. Hosted benchmark records still need publishing.
+- Phases complete: 4/5. Phase 5 remains in progress.
 
 ## Phase 1 record
 
@@ -83,10 +83,49 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   prompts, scoring sheets/key, fine-tuning files, and local SQLite data.
 - Added `API_DEPLOYMENT.md` with required environment variables and Preview to
   Production rollout steps.
-- No Vercel CLI is installed, `.vercel/project.json` is absent, and no hosted
-  database or Blob credentials are configured. No live deployment was attempted.
-- Deployment preparation is uncommitted. A live rollout cannot finish until a
-  Vercel project is authenticated/linked and storage is configured.
+- Vercel project `llm-testing-pipeline` was created from the GitHub repository.
+- Connected a Neon PostgreSQL database to Production and Preview using the
+  `DATABASE` prefix, which provides the required `DATABASE_URL` variable.
+- Created a private Vercel Blob store in `iad1` and enabled its read-write
+  token for the project. The user confirmed creation; secret values were not
+  inspected or recorded.
+- The production reviewer page and API schema load at the deployed URL. The
+  owner page reports zero runs after token setup, so the owner credential is
+  accepted; the hosted catalog still needs published records.
+- User provided production URL `https://llm-testing-pipeline.vercel.app/`.
+  Inspected the live page and OpenAPI document; the reviewer UI and API routes
+  are being served. The page asks for Owner or Shared review access and a
+  credential. Owner share controls include expiry hours (default 168) and
+  optional system-prompt/profile access. Run availability has not been
+  confirmed because no credential was used and no runs have been published.
+- User reports the owner page now loads but shows zero runs. Found three
+  completed local runs: Qwen3 8B (`20260922_104435_c7a061`), Llama 3.1 8B
+  (`20260922_140247_243752`), and Gemma 3 12B (`20260922_172853_2f88de`),
+  each with 56 tests. These have not been published to hosted storage, which
+  explains the empty catalog if remote mode is enabled. No upload was made.
+  Initially the local publisher dry-run could not start because FastAPI was
+  missing from the active `.venv`; installed the declared project requirements
+  in that environment and reran the dry-run successfully for all three full
+  runs plus the Qwen retry subset. Archives include the normal benchmark
+  question and final response data. They omit the separate system prompt and
+  profile files, and the publisher now strips `metadata.thinking`.
+  Next: confirm remote mode is active in Production, then publish approved run
+  IDs to the linked Postgres and private Blob store.
+  Vercel CLI 60.0.0 is available through `npm exec`, but `vercel whoami` reports
+  the local CLI token is invalid, so publishing from this workspace requires
+  `vercel login` and linking the project. No artifacts were uploaded.
+- User identified a Qwen retry folder (`20260924_134826_3d2d7f`) for two of the
+  original empty cases. `MATH-JEE-02` has a 1,897-character answer;
+  `PHY-NC-03` remains empty. The other original empty cases,
+  `PHY-JEE-03` and `CHEM-JEE-03`, were not retried. The retry has a higher
+  token limit/context than the original run, so a `run.json` now labels it as a
+  two-test retry subset rather than merging it into the original 56-test run.
+- Publisher review found raw `metadata.thinking` was present inside
+  `results.jsonl`, despite the separate system-prompt/profile artifacts being
+  excluded by default. Updated the publisher to remove that field from the
+  uploaded archive and documented the behavior. Local source results remain
+  untouched. No upload has happened; this change needs review before any
+  publishing.
 
 ## Issue log
 
@@ -95,4 +134,11 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 | 2026-09-24 | Fine-tuning progress log included API work. | Removed API entries from `NIERA_FINETUNE_PROGRESS.md`; use this file for API work. | Resolved |
 | 2026-09-24 | Share credentials could leak if placed in request paths or query strings. | Reviewer UI keeps them in the URL fragment and sends them in an authorization header. | Resolved in Phase 4 |
 | 2026-09-24 | Hosted catalog/blob artifacts were not used by read endpoints after Phase 3. | Added remote read adapter in Phase 4; Vercel deployment is still pending. | Resolved for API reads |
-| 2026-09-24 | No Vercel CLI, linked project, or storage credentials are available in this workspace. | Prepared the app entry point, deployment exclusion list, and setup guide; live deployment awaits Vercel project authentication and storage setup. | Open |
+| 2026-09-24 | No authenticated Vercel CLI project link was available in the workspace. | User created the Vercel project and connected Neon and private Blob storage through the dashboard. Vercel CLI is available, but its local auth token is invalid; login and project linking remain. | In progress |
+| 2026-09-24 | User needed help interpreting the deployed review page fields. | Inspected the production page and API schema; documented owner/share credential use and optional share fields. No credential values were accessed. | Resolved |
+| 2026-09-24 | Owner credential was reported as invalid/expired and its Vercel value is hidden. | The Vercel value is hidden by design. User replaced the value and the owner page now accepts it. | Resolved |
+| 2026-09-24 | Hosted review page reports 0 runs. | Identified that run artifacts are still local. Validated three completed runs and one Qwen retry subset in dry-run. No data was uploaded; publishing remains. | In progress |
+| 2026-09-24 | Publisher dry-run initially lacked FastAPI in the active virtualenv. | Installed `requirements.txt` into the existing `.venv`; dry-run then validated all four publish records. Upload has not been performed. | Resolved |
+| 2026-09-24 | Local Vercel CLI authentication is invalid. | `npm exec` provides Vercel CLI 60.0.0, but `vercel whoami` requires a fresh login and project link before publisher can access hosted environment variables. | Open |
+| 2026-09-24 | Qwen rerun covered only two of four empty outputs and used a different token/context configuration. | Kept the original run unchanged and added a two-test partial-retry manifest. It records one recovered response and one remaining empty response, with the changed configuration visible. | Prepared locally |
+| 2026-09-24 | Raw result archives would have included model `metadata.thinking`. | Publisher now strips this field from the upload archive while preserving local originals and fields needed for review. Dry-run archive inspection confirmed it is absent. | Resolved locally; deployment pending |

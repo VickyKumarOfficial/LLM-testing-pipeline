@@ -89,7 +89,24 @@ def make_archive(run_dir: Path, names: list[str]) -> tuple[bytes, str]:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in names:
-            archive.write(run_dir / name, arcname=name)
+            path = run_dir / name
+            if name == "results.jsonl":
+                # Keep model-internal reasoning local. The review UI only needs
+                # the final answer, test and timing fields from each result.
+                sanitized_rows = []
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    metadata = row.get("metadata")
+                    if isinstance(metadata, dict):
+                        metadata = dict(metadata)
+                        metadata.pop("thinking", None)
+                        row["metadata"] = metadata
+                    sanitized_rows.append(json.dumps(row, ensure_ascii=False))
+                archive.writestr(name, "\n".join(sanitized_rows) + "\n")
+            else:
+                archive.write(path, arcname=name)
     content = buffer.getvalue()
     if len(content) > MAX_ARCHIVE_BYTES:
         raise ValueError("run archive exceeds the 100 MB publish limit")

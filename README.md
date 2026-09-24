@@ -273,6 +273,10 @@ and that the result count equals `test_count`. It includes only run metadata,
 results, and performance summaries by default. To deliberately include sensitive
 snapshots, add `--include-system-prompt` or `--include-profile`.
 
+Before upload, the publisher removes `metadata.thinking` from the archived
+`results.jsonl`. The local source results remain unchanged. The shared archive
+keeps the final answer, question, and generation metadata used by the review UI.
+
 After reviewing the dry-run report, publish with:
 
     python scripts/publish_run.py 20260922_172853_2f88de
