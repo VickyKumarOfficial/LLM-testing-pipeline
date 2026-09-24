@@ -160,6 +160,12 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 - Code and docs compiled cleanly and `git diff --check` passed. Prepared four
   ignored local ZIPs: three full runs and the two-question Qwen retry subset;
   each is below the 4 MB upload cap. Nothing has been uploaded.
-- Committed this development phase as `cce4682` (`Add owner upload flow for
-  hosted benchmark runs`). Production has not been redeployed. Stop for review;
-  after review, redeploy and publish the approved archives.
+- Committed this development phase as `14324b9` (`Add owner upload flow for
+  hosted benchmark runs`). After review, deployed to Vercel Production at
+  `https://llm-testing-pipeline.vercel.app/`; deployment ID
+  `dpl_EAbYgpxECe2rbePucbarEwoxysmj` is READY. Verified the review page and
+  OpenAPI return HTTP 200, the publish route is present, and unauthenticated
+  publish returns HTTP 401. The four archives remain local and no run has been
+  uploaded because the owner token is intentionally hidden from local CLI and
+  is available only to the user in the browser/Vercel dashboard. Next: user
+  enters owner token in the deployed page and uploads archives.
