@@ -110,6 +110,7 @@ All routes are under `/api/v1` and require HTTPS.
 | `GET /runs/{run_id}` | Run manifest, generation settings, prompt hash, counts, and performance summary. |
 | `GET /runs/{run_id}/results` | Paginated test results. Filter by `test_id`, track, subject, and difficulty. Include question, answer, token counts, latency, and error state. |
 | `GET /runs/{run_id}/results/{test_id}` | Full question and response record for one test. |
+| `GET /runs/{run_id}/dataset` | Display the complete question set used by that run, with question metadata and without answer keys. |
 | `GET /runs/{run_id}/artifacts/system-prompt` | Exact rendered system prompt snapshot, with content type text/plain and hash metadata. |
 | `GET /runs/{run_id}/artifacts/profile` | Student profile snapshot used for the run. |
 | `GET /runs/{run_id}/export` | Download sanitized JSONL or a ZIP with run metadata, outputs, and performance summaries. Owner prompt/profile inclusion is controlled by server settings. |
@@ -120,8 +121,9 @@ All routes are under `/api/v1` and require HTTPS.
 
 Share credentials use matching read routes under `/api/v1/shared/runs`,
 `POST /api/v1/shared/comparisons`, and
-`GET /api/v1/shared/runs/{run_id}/export`. Comparison responses are paginated
-in batches of at most 20 test IDs to keep response bodies bounded.
+`GET /api/v1/shared/runs/{run_id}/export`. They can also inspect the run's
+question set at `/api/v1/shared/runs/{run_id}/dataset`. Comparison responses
+are paginated in batches of at most 20 test IDs to keep response bodies bounded.
 
 Owner share management currently uses `GET`, `POST`, and `DELETE
 /api/v1/shares...` with the owner bearer token. Shared reads use

@@ -398,6 +398,38 @@ def get_run_context(run_id: str) -> dict[str, Any]:
     return run_context(run_id, include_prompt=True, include_profile=True)
 
 
+QUESTION_FIELDS = (
+    "test_id", "track", "subject", "class", "chapter", "difficulty",
+    "source", "source_reference", "question", "answer_type",
+)
+
+
+def run_dataset(run_id: str) -> dict[str, Any]:
+    manifest = artifacts.get_manifest(run_id)
+    dataset_name = str(manifest.get("dataset", "")).replace("\\", "/").rsplit("/", 1)[-1]
+    rows = artifacts.get_results(run_id)
+    questions = []
+    for row in rows:
+        test = row.get("test") or {}
+        question = {key: test[key] for key in QUESTION_FIELDS if key in test}
+        question.setdefault("test_id", row.get("test_id"))
+        questions.append(question)
+    if len(questions) > 500:
+        raise HTTPException(status_code=413, detail="Question set exceeds the 500-question display limit")
+    return {
+        "run_id": run_id,
+        "dataset": dataset_name,
+        "count": len(questions),
+        "questions": questions,
+    }
+
+
+@app.get("/api/v1/runs/{run_id}/dataset", dependencies=[Depends(require_api_token)])
+def get_run_dataset(run_id: str) -> dict[str, Any]:
+    """Return the complete question set used by a run, without model answers."""
+    return run_dataset(run_id)
+
+
 @app.get("/api/v1/runs/{run_id}/export", dependencies=[Depends(require_api_token)])
 def export_run(
     run_id: str,
@@ -520,6 +552,14 @@ def get_shared_run_context(
         include_prompt=permissions["system_prompt"],
         include_profile=permissions["profile"],
     )
+
+
+@app.get("/api/v1/shared/runs/{run_id}/dataset")
+def get_shared_run_dataset(
+    run_id: str, share: dict[str, Any] = Depends(require_share)
+) -> dict[str, Any]:
+    verify_run_scope(share, run_id)
+    return run_dataset(run_id)
 
 
 @app.get("/api/v1/shared/runs")

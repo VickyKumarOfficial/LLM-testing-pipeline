@@ -195,10 +195,12 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   prompts/profiles directly using the review page space. The previous screenshot
   had prompt/profile sharing selected, but existing hosted archives excluded
   both, so the API rejects creating a share that requests unavailable files.
-- Added owner-authenticated `GET /api/v1/runs/{run_id}/context` and a
-  share-scoped context route. The reviewer page displays prompt/profile in
-  expandable, per-run panels when a run is selected. Share readers only receive
-  artifact fields explicitly granted to their share.
+- Added owner-authenticated and share-scoped context routes for prompts and
+  profiles, plus full question-set endpoints. Replaced the inline details
+  panels with three buttons: View system prompts, View student profiles, and
+  View full question sets. Each button opens a scrollable popup grouped by
+  selected run. Profiles render as readable labeled fields; question sets show
+  all questions used by that run and omit answer keys.
 - Enabled opt-in `--include-profile` archive publishing alongside prompts.
   Existing hosted runs need replacement ZIPs to include either artifact.
 - Prepared four ignored replacement ZIPs in

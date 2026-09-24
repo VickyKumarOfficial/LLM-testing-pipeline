@@ -39,13 +39,25 @@
     .comparison-progress strong { display: block; font-size: 1.08rem; }
     .comparison-progress p { margin: 4px 0 0; }
     .help { margin: 4px 0 12px; color: #526171; max-width: 850px; }
-    .context-runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
-    .context-run { border: 1px solid #dce2e8; border-radius: 8px; padding: 14px; min-width: 0; }
-    .context-run h3 { margin: 0 0 10px; }
-    .context-run details { border-top: 1px solid #e2e7ec; padding: 9px 0; }
-    .context-run summary { cursor: pointer; color: #183f68; font-weight: 650; }
-    .context-run pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: #f5f7f9; border-radius: 6px; padding: 12px; font: .92rem/1.55 system-ui, sans-serif; }
-    .context-empty { color: #687787; }
+    dialog { width: min(900px, calc(100vw - 32px)); max-height: 84vh; padding: 0; border: 1px solid #b9c6d2; border-radius: 12px; color: #18212b; }
+    dialog::backdrop { background: rgb(14 28 42 / 55%); }
+    .dialog-head { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; background: white; border-bottom: 1px solid #dce2e8; z-index: 1; }
+    .dialog-head h2 { margin: 0; }
+    #content-body { padding: 8px 20px 20px; overflow: auto; max-height: calc(84vh - 80px); }
+    .content-run { border-bottom: 1px solid #dce2e8; padding: 12px 0 18px; }
+    .content-run h3 { color: #183f68; }
+    .content-block { background: #f5f7f9; border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+    .content-block pre { white-space: pre-wrap; overflow-wrap: anywhere; font: .95rem/1.65 system-ui, sans-serif; margin: 0; }
+    .content-block .answer-content { font: 1rem/1.65 system-ui, sans-serif; }
+    .profile-object { border-left: 2px solid #dce2e8; padding-left: 14px; margin: 8px 0; }
+    .profile-object > h4 { margin: 8px 0; }
+    .profile-value { margin: 6px 0; }
+    .profile-list { margin: 5px 0; padding-left: 22px; }
+    .question-item { border-top: 1px solid #e0e5ea; padding: 12px 0; }
+    .question-item h4 { margin: 0 0 6px; }
+    .question-item p { margin: 5px 0; }
+    .question-meta { color: #586777; font-size: .92rem; }
+    .content-empty { color: #687787; }
     hr { border: 0; border-top: 1px solid #dce2e8; margin: 22px 0; }
     #notice { min-height: 1.5em; color: #8b2e20; }
     #share-link { overflow-wrap: anywhere; }
@@ -79,6 +91,13 @@
       <button id="next" class="secondary" disabled>Next 10 tests</button>
       <button id="download" class="secondary" disabled>Download selected run</button>
     </div>
+    <h3>Run contents</h3>
+    <p class="help">Open a popup to inspect the complete selected prompts, profiles, or question sets.</p>
+    <div class="row">
+      <button id="view-prompts" class="secondary" disabled>View system prompts</button>
+      <button id="view-profiles" class="secondary" disabled>View student profiles</button>
+      <button id="view-datasets" class="secondary" disabled>View full question sets</button>
+    </div>
   </section>
 
   <section id="owner-tools" class="panel" hidden>
@@ -105,11 +124,13 @@
     </div>
   </section>
 
-  <section id="run-context" class="panel" hidden>
-    <h2>System prompts and student profiles</h2>
-    <p class="help">Details for the selected runs. Expand or collapse each section. Shared reviewers see only details granted by their review link.</p>
-    <div id="context-runs" class="context-runs"></div>
-  </section>
+  <dialog id="content-dialog" aria-labelledby="content-title">
+    <div class="dialog-head">
+      <h2 id="content-title">Run contents</h2>
+      <button id="content-close" class="secondary" type="button">Close</button>
+    </div>
+    <div id="content-body"></div>
+  </dialog>
 
   <section id="comparison">
     <h2>Comparison</h2>
@@ -122,7 +143,7 @@
     (() => {
       const api = "/api/v1";
       const byId = id => document.getElementById(id);
-      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0, contextByRun: {} };
+      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0 };
       const headers = () => ({ "Authorization": `${state.scheme} ${state.credential}` });
       const selectedIds = () => [...document.querySelectorAll("input[name=run]:checked")].map(x => x.value);
       const notice = message => { byId("notice").textContent = message || ""; };
@@ -156,7 +177,7 @@
           checkbox.type = "checkbox";
           checkbox.name = "run";
           checkbox.value = run.run_id;
-          checkbox.addEventListener("change", () => { state.offset = 0; updateButtons(); loadRunContexts(); });
+          checkbox.addEventListener("change", () => { state.offset = 0; updateButtons(); });
           const detail = document.createElement("span");
           detail.textContent = `${run.model || "unknown model"} · ${run.run_id} · ${run.ok_count ?? 0}/${run.test_count ?? 0} responses`;
           label.append(checkbox, detail);
@@ -171,6 +192,9 @@
         byId("compare").disabled = ids.length < 2 || ids.length > 4;
         byId("download").disabled = ids.length !== 1;
         byId("create-share").disabled = state.scheme !== "Bearer" || ids.length < 1 || ids.length > 20;
+        byId("view-prompts").disabled = ids.length === 0;
+        byId("view-profiles").disabled = ids.length === 0;
+        byId("view-datasets").disabled = ids.length === 0;
         byId("previous").disabled = state.offset <= 0;
         byId("next").disabled = state.offset + 10 >= state.totalTests;
       }
@@ -197,6 +221,92 @@
         if (className) node.className = className;
         parent.append(node);
         return node;
+      }
+
+      function runRoute(id, suffix) {
+        const root = state.scheme === "Share" ? "/shared/runs" : "/runs";
+        return `${root}/${encodeURIComponent(id)}/${suffix}`;
+      }
+
+      function renderProfile(parent, value, label = "") {
+        if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+          const group = document.createElement("div"); group.className = "profile-object";
+          if (label) addText(group, "h4", label.replaceAll("_", " "));
+          for (const [key, child] of Object.entries(value)) renderProfile(group, child, key);
+          parent.append(group);
+          return;
+        }
+        if (Array.isArray(value)) {
+          const group = document.createElement("div"); group.className = "profile-object";
+          addText(group, "h4", label.replaceAll("_", " "));
+          const list = document.createElement("ul"); list.className = "profile-list";
+          for (const child of value) {
+            const item = document.createElement("li");
+            if (child !== null && typeof child === "object") renderProfile(item, child);
+            else item.textContent = String(child);
+            list.append(item);
+          }
+          group.append(list); parent.append(group); return;
+        }
+        const row = document.createElement("p"); row.className = "profile-value";
+        const name = document.createElement("strong"); name.textContent = `${label.replaceAll("_", " ")}: `;
+        row.append(name, document.createTextNode(String(value ?? ""))); parent.append(row);
+      }
+
+      async function showContents(kind) {
+        const ids = selectedIds();
+        if (!ids.length) return;
+        const definitions = {
+          prompts: { title: "System prompts", route: "context", field: "system_prompt", empty: "This prompt is not included in the uploaded run or review link." },
+          profiles: { title: "Student profiles", route: "context", field: "student_profile", empty: "This profile is not included in the uploaded run or review link." },
+          datasets: { title: "Full question sets", route: "dataset" },
+        };
+        const definition = definitions[kind];
+        byId("content-title").textContent = definition.title;
+        const body = byId("content-body");
+        body.replaceChildren();
+        byId("content-dialog").showModal();
+        for (const id of ids) {
+          const run = state.runs.find(item => item.run_id === id);
+          const section = document.createElement("section");
+          section.className = "content-run";
+          addText(section, "h3", `${run?.model || "Run"} · ${id}`);
+          addText(section, "p", "Loading…", "content-empty");
+          body.append(section);
+          try {
+            const response = await request(runRoute(id, definition.route));
+            const data = await response.json();
+            section.querySelector(".content-empty")?.remove();
+            if (kind === "datasets") {
+              addText(section, "p", `${data.dataset || "Question set"} · ${data.count} question(s) used by this run`, "question-meta");
+              for (const [index, item] of data.questions.entries()) {
+                const question = document.createElement("article");
+                question.className = "question-item";
+                addText(question, "h4", `${index + 1}. ${item.test_id || "Question"}`);
+                addText(question, "p", item.question || "Question text unavailable.");
+                const metadata = [item.track, item.subject, item.class ? `Class ${item.class}` : null, item.chapter, item.difficulty, item.source]
+                  .filter(Boolean).join(" · ");
+                if (metadata) addText(question, "p", metadata, "question-meta");
+                if (item.source_reference) addText(question, "p", item.source_reference, "question-meta");
+                section.append(question);
+              }
+            } else {
+              const value = data[definition.field];
+              if (value == null) addText(section, "p", definition.empty, "content-empty");
+              else {
+                const block = document.createElement("div"); block.className = "content-block";
+                if (kind === "prompts") {
+                  const formatted = document.createElement("div"); formatted.className = "answer-content";
+                  renderMarkdown(formatted, value); block.append(formatted);
+                } else renderProfile(block, value);
+                section.append(block);
+              }
+            }
+          } catch (error) {
+            const loading = section.querySelector(".content-empty");
+            if (loading) loading.textContent = error.message;
+          }
+        }
       }
 
       function appendInline(parent, text) {
@@ -343,9 +453,9 @@
         if (!run_ids.length || run_ids.length > 20) return;
         try {
           if (byId("include-prompt").checked || byId("include-profile").checked) {
-            await loadRunContexts();
             for (const id of run_ids) {
-              const context = state.contextByRun[id] || {};
+              const contextResponse = await request(runRoute(id, "context"));
+              const context = await contextResponse.json();
               if (byId("include-prompt").checked && !context.system_prompt) {
                 throw new Error(`Run ${id} has no hosted system prompt. Re-upload it with --include-system-prompt first.`);
               }
@@ -394,44 +504,6 @@
         } catch (error) { notice(error.message); }
       }
 
-      async function loadRunContexts() {
-        const ids = selectedIds();
-        const section = byId("run-context");
-        const root = byId("context-runs");
-        state.contextByRun = {};
-        root.replaceChildren();
-        section.hidden = ids.length === 0;
-        if (!ids.length) return;
-        for (const id of ids) {
-          const run = state.runs.find(item => item.run_id === id);
-          const card = document.createElement("article");
-          card.className = "context-run";
-          addText(card, "h3", `${run?.model || "Run"} · ${id}`);
-          addText(card, "p", "Loading run details…", "context-empty");
-          root.append(card);
-          try {
-            const path = state.scheme === "Share"
-              ? `/shared/runs/${encodeURIComponent(id)}/context`
-              : `/runs/${encodeURIComponent(id)}/context`;
-            const response = await request(path);
-            const context = await response.json();
-            state.contextByRun[id] = context;
-            card.querySelector(".context-empty")?.remove();
-            const prompt = document.createElement("details"); prompt.open = true;
-            addText(prompt, "summary", "System prompt");
-            if (context.system_prompt) addText(prompt, "pre", context.system_prompt);
-            else addText(prompt, "p", state.scheme === "Share" ? "Not included in this review link." : "Not in this hosted run yet. Re-upload it with --include-system-prompt.", "context-empty");
-            const profile = document.createElement("details"); profile.open = true;
-            addText(profile, "summary", "Student profile");
-            if (context.student_profile) addText(profile, "pre", JSON.stringify(context.student_profile, null, 2));
-            else addText(profile, "p", state.scheme === "Share" ? "Not included in this review link." : "Not in this hosted run yet. Re-upload it with --include-profile.", "context-empty");
-            card.append(prompt, profile);
-          } catch (error) {
-            card.querySelector(".context-empty").textContent = error.message;
-          }
-        }
-      }
-
       async function publishRuns() {
         if (state.scheme !== "Bearer") return;
         const files = [...byId("run-archives").files];
@@ -465,6 +537,10 @@
       byId("next").addEventListener("click", () => { state.offset += 10; compare(); });
       byId("download").addEventListener("click", downloadRun);
       byId("create-share").addEventListener("click", createShare);
+      byId("view-prompts").addEventListener("click", () => showContents("prompts"));
+      byId("view-profiles").addEventListener("click", () => showContents("profiles"));
+      byId("view-datasets").addEventListener("click", () => showContents("datasets"));
+      byId("content-close").addEventListener("click", () => byId("content-dialog").close());
       byId("publish-runs").addEventListener("click", publishRuns);
       byId("scheme").addEventListener("change", () => {
         byId("owner-tools").hidden = byId("scheme").value !== "Bearer";
