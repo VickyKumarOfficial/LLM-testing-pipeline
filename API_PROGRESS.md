@@ -227,4 +227,13 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   API routes remain available to preserve the existing API contract; they are
   no longer exposed as controls in this reviewer page.
 - JavaScript syntax check, Python bytecode compilation, and `git diff --check`
-  passed. Deployment is pending.
+  passed. Committed as `f98fa8a` (`Show run context directly in review page`).
+- The first Vercel deploy attempt returned `Not authorized`; the authenticated
+  CLI still identified the linked project. Retried with CLI diagnostics and the
+  Production deployment completed successfully as
+  `dpl_Aups8vyzWgFdvx98xQ8GTRYgYpqJ`.
+- Checked the production page: all three popup buttons are present and the
+  share creation and ZIP upload controls are gone. Unauthenticated context
+  requests return HTTP 401, so the owner API key remains required.
+- Deployment is complete. A separate viewer must use the owner API key; this
+  direct-popup setup does not create an independent read-only access link.
