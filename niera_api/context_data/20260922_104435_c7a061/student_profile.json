@@ -1,0 +1,110 @@
+{
+  "profile_id": "JEE-2026-ARJUN-01",
+  "profile_note": "Synthetic student profile approximating the knowledge-graph state that Niera's classifier + KB layer would supply at runtime. Subject and current_topic are deliberately left UNKNOWN so that implicit-intent inference is still under test (see research README section 11).",
+  "student_class": "12",
+  "academic_level": "Class 12, second year of a two-year JEE program; completed the full Class 11 syllabus, currently in revision + mock-test phase",
+  "target_exam": "JEE Main 2026 (Session 1, January) with JEE Advanced 2026 as the stretch target",
+  "subject": "UNKNOWN - infer from the student's question",
+  "current_topic": "UNKNOWN - infer from the student's question",
+  "proficiency": "Moderate overall (composite mastery 0.58). Strongly uneven across subjects: Chemistry 0.71, Mathematics 0.60, Physics 0.44. Recent full-syllabus mock percentile: 78.",
+  "explanation_depth": "Moderate by default. Wants the governing concept stated before the algebra, then compact steps. Becomes disengaged past roughly 400 words unless the question is genuinely multi-concept.",
+  "language": "English, with occasional Hinglish phrasing in the student's own questions. Always respond in English; keep technical terms in standard exam vocabulary.",
+  "learning_pace": "Fast at pattern-matching and recall, slow at derivations. Tends to jump to a formula before checking whether its assumptions hold. Solves roughly 45 problems/week; average 4.2 min per MCQ against a 2.5 min exam target.",
+  "strengths": [
+    {
+      "concept": "Organic reaction mechanisms (SN1/SN2/E1/E2)",
+      "mastery": 0.86,
+      "status": "mastered",
+      "evidence": "18/20 correct across last 3 mocks"
+    },
+    {
+      "concept": "Chemical equilibrium and Le Chatelier's principle",
+      "mastery": 0.82,
+      "status": "mastered",
+      "evidence": "consistent, including qualitative-shift questions"
+    },
+    {
+      "concept": "Definite integration by substitution and by parts",
+      "mastery": 0.79,
+      "status": "strong",
+      "evidence": "fast and reliable on standard forms"
+    },
+    {
+      "concept": "Matrices and determinants",
+      "mastery": 0.77,
+      "status": "strong",
+      "evidence": "no errors in last 2 mocks"
+    },
+    {
+      "concept": "Sequences and series (AP/GP)",
+      "mastery": 0.74,
+      "status": "strong",
+      "evidence": "handles nested/telescoping forms"
+    },
+    {
+      "concept": "Periodic table trends and chemical bonding",
+      "mastery": 0.73,
+      "status": "strong",
+      "evidence": "NCERT-aligned recall is dependable"
+    }
+  ],
+  "weak_areas": [
+    {
+      "concept": "Rotational mechanics - moment of inertia, angular momentum conservation",
+      "mastery": 0.28,
+      "status": "critical",
+      "error_pattern": "Applies tau = I*alpha about a non-inertial or accelerating axis without justification; frequently omits the parallel-axis term."
+    },
+    {
+      "concept": "Rigid-body rolling constraints",
+      "mastery": 0.31,
+      "status": "critical",
+      "error_pattern": "Assumes rolling without slipping when the problem does not state it; does not check the friction condition."
+    },
+    {
+      "concept": "Electromagnetic induction - Lenz's law sign conventions",
+      "mastery": 0.35,
+      "status": "weak",
+      "error_pattern": "Gets induced-EMF magnitude right, direction wrong roughly half the time."
+    },
+    {
+      "concept": "Thermodynamics - distinguishing system vs surroundings sign conventions",
+      "mastery": 0.38,
+      "status": "weak",
+      "error_pattern": "Confuses work done BY versus work done ON the gas; carries the error into first-law problems."
+    },
+    {
+      "concept": "Inverse trigonometric functions - principal value branches",
+      "mastery": 0.41,
+      "status": "weak",
+      "error_pattern": "Ignores domain restrictions and returns out-of-branch answers."
+    },
+    {
+      "concept": "3D geometry - skew lines, shortest distance",
+      "mastery": 0.44,
+      "status": "weak",
+      "error_pattern": "Sets up the vector formula correctly but mismanages signs in the scalar triple product."
+    },
+    {
+      "concept": "Probability - conditional probability and Bayes' theorem",
+      "mastery": 0.47,
+      "status": "developing",
+      "error_pattern": "Reverses the conditioning direction, i.e. computes P(A|B) when P(B|A) is required."
+    },
+    {
+      "concept": "Coordination compounds - CFT and magnetic behaviour",
+      "mastery": 0.49,
+      "status": "developing",
+      "error_pattern": "Assigns high-spin/low-spin without checking the ligand field strength order."
+    }
+  ],
+  "recent_learning_pattern": [
+    "Last 14 days: 9 active days. Physics attempted least (21% of total practice time) despite being the weakest subject - active avoidance of the weakest area.",
+    "Accuracy on first attempt: Chemistry 74%, Mathematics 63%, Physics 41%.",
+    "Asks very short, context-free questions ('rotational', 'why negative here', 'solve this') and expects Niera to infer the topic from the prior turn.",
+    "Frequently supplies their own attempted answer and asks for confirmation; that answer is wrong roughly 1 in 3 times, most often in Physics.",
+    "Repeatedly re-asks rotational-mechanics concepts (4 times in 14 days), indicating the earlier explanations did not transfer.",
+    "Responds well to a stated governing principle followed by numbered steps; disengages from long prose explanations.",
+    "Time pressure is the stated concern: wants exam-usable shortcuts, but has been observed misapplying shortcuts outside their valid conditions."
+  ]
+}

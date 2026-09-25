@@ -209,3 +209,22 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 - Share creation now checks that selected artifact files exist and provides a
   direct re-upload instruction instead of making an opaque failing request.
 - Changes are local and awaiting review. No deployment or share was created.
+
+## Direct context popups (2026-09-25)
+
+- Removed the review-share creation, expiry, existing-share management, and ZIP
+  upload controls from the reviewer page. This display flow no longer creates
+  sharing links or asks for file uploads.
+- Kept three direct popup buttons for selected runs: system prompts, student
+  profiles, and the full question sets. These read through owner-authenticated
+  API routes; the owner API key is required to view benchmark data.
+- Vercel excludes the `results/` tree, so copied only the four selected runs'
+  existing `system_prompt.rendered.txt` and `student_profile.json` files into
+  `niera_api/context_data/`. The function reads those bounded, allowlisted
+  files when the published archive does not contain them. No Blob upload is
+  required for prompt/profile display.
+- Removed stale share-link and upload JavaScript paths from the page. The share
+  API routes remain available to preserve the existing API contract; they are
+  no longer exposed as controls in this reviewer page.
+- JavaScript syntax check, Python bytecode compilation, and `git diff --check`
+  passed. Deployment is pending.

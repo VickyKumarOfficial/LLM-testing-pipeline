@@ -6,12 +6,13 @@ import io
 import json
 import os
 import zipfile
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
 from niera_api import catalog
-from niera_api.main_paths import RESULTS_DIR, run_directory
+from niera_api.main_paths import RESULTS_DIR, RUN_ID_RE, run_directory
 
 
 ALLOWED_ARTIFACTS = {
@@ -23,6 +24,23 @@ ALLOWED_ARTIFACTS = {
     "student_profile.json",
 }
 MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
+CONTEXT_ARTIFACTS = {"system_prompt.rendered.txt", "student_profile.json"}
+CONTEXT_DATA_DIR = Path(__file__).resolve().parent / "context_data"
+
+
+def _bundled_context_artifact(run_id: str, name: str) -> bytes | None:
+    """Load only curated, bundled prompt/profile files for published runs."""
+    if name not in CONTEXT_ARTIFACTS or not RUN_ID_RE.fullmatch(run_id):
+        return None
+    try:
+        root = CONTEXT_DATA_DIR.resolve(strict=True)
+        path = (root / run_id / name).resolve(strict=True)
+        path.relative_to(root)
+        if not path.is_file() or path.stat().st_size > 1_000_000:
+            return None
+        return path.read_bytes()
+    except (OSError, ValueError):
+        return None
 
 
 def remote_mode() -> bool:
@@ -111,6 +129,11 @@ def get_run_bundle(run_id: str) -> dict[str, bytes]:
                     if name not in ALLOWED_ARTIFACTS or name not in names:
                         raise HTTPException(status_code=502, detail="Published run archive is invalid")
                     output[name] = archive.read(name)
+                for name in CONTEXT_ARTIFACTS:
+                    if name not in output:
+                        bundled = _bundled_context_artifact(run_id, name)
+                        if bundled is not None:
+                            output[name] = bundled
                 return output
         except (zipfile.BadZipFile, KeyError):
             raise HTTPException(status_code=502, detail="Published run archive is invalid") from None

@@ -60,24 +60,21 @@
     .content-empty { color: #687787; }
     hr { border: 0; border-top: 1px solid #dce2e8; margin: 22px 0; }
     #notice { min-height: 1.5em; color: #8b2e20; }
-    #share-link { overflow-wrap: anywhere; }
     @media (max-width: 640px) { body { padding: 18px 12px 40px; } }
   </style>
 </head>
 <body>
   <h1>Niera benchmark review</h1>
-  <p class="muted">Compare saved benchmark runs and inspect the original responses.</p>
+  <p class="muted">Compare saved benchmark runs and open their prompts, student profiles, and question sets.</p>
 
   <section class="panel">
     <div class="row">
-      <label>Access type
-        <select id="scheme"><option value="Bearer">Owner</option><option value="Share">Shared review</option></select>
-      </label>
-      <label style="flex:1; min-width:260px">Access credential
-        <input id="token" type="password" autocomplete="off" placeholder="Paste owner or share credential">
+      <label style="flex:1; min-width:260px">Owner access key
+        <input id="token" type="password" autocomplete="off" placeholder="Paste your owner API key">
       </label>
       <button id="connect">Load runs</button>
     </div>
+    <p class="muted">Anyone opening this page needs the owner API key to view the runs and their prompt/profile details.</p>
     <p id="notice" role="status"></p>
   </section>
 
@@ -100,30 +97,6 @@
     </div>
   </section>
 
-  <section id="owner-tools" class="panel" hidden>
-    <h2>Create a review share</h2>
-    <p class="help">Create a private link that lets another person view and compare only the runs you select. They use that link; they do not need your owner key or their own OpenSSL key. You can revoke the link below.</p>
-    <div class="row">
-      <label>Link expires after (hours) <input id="expiry" type="number" min="1" max="8760" value="168"></label>
-      <label><span><input id="include-prompt" type="checkbox"> Include system prompt</span></label>
-      <label><span><input id="include-profile" type="checkbox"> Include student profile</span></label>
-      <button id="create-share">Create share for selected runs</button>
-    </div>
-    <p class="help">168 hours is the default expiry (7 days). Prompt and profile details are included only if you select them here and each run has that artifact in its uploaded archive.</p>
-    <p id="share-link"></p>
-    <h3>Existing shares</h3>
-    <div id="shares"></div>
-    <hr>
-    <h3>Publish benchmark runs</h3>
-    <p class="muted">Choose sanitized ZIP archives created by the local publisher. Each archive must be no larger than 4 MB. The upload is available only to the owner. Use <code>--include-system-prompt</code> and/or <code>--include-profile</code> to include these details in the hosted run. Recipients only see them if you also select the matching share option above.</p>
-    <div class="row">
-      <label style="flex:1; min-width:260px">Run archives
-        <input id="run-archives" type="file" accept=".zip,application/zip" multiple>
-      </label>
-      <button id="publish-runs">Upload selected archives</button>
-    </div>
-  </section>
-
   <dialog id="content-dialog" aria-labelledby="content-title">
     <div class="dialog-head">
       <h2 id="content-title">Run contents</h2>
@@ -143,8 +116,8 @@
     (() => {
       const api = "/api/v1";
       const byId = id => document.getElementById(id);
-      const state = { runs: [], credential: "", scheme: "Bearer", offset: 0, totalTests: 0 };
-      const headers = () => ({ "Authorization": `${state.scheme} ${state.credential}` });
+      const state = { runs: [], credential: "", offset: 0, totalTests: 0 };
+      const headers = () => ({ "Authorization": `Bearer ${state.credential}` });
       const selectedIds = () => [...document.querySelectorAll("input[name=run]:checked")].map(x => x.value);
       const notice = message => { byId("notice").textContent = message || ""; };
 
@@ -155,14 +128,6 @@
           throw new Error(body.detail || `Request failed (${response.status})`);
         }
         return response;
-      }
-
-      function setMode(scheme, token) {
-        state.scheme = scheme;
-        state.credential = token;
-        byId("scheme").value = scheme;
-        byId("token").value = token;
-        byId("owner-tools").hidden = scheme !== "Bearer";
       }
 
       function renderRuns(runs) {
@@ -191,7 +156,6 @@
         const ids = selectedIds();
         byId("compare").disabled = ids.length < 2 || ids.length > 4;
         byId("download").disabled = ids.length !== 1;
-        byId("create-share").disabled = state.scheme !== "Bearer" || ids.length < 1 || ids.length > 20;
         byId("view-prompts").disabled = ids.length === 0;
         byId("view-profiles").disabled = ids.length === 0;
         byId("view-datasets").disabled = ids.length === 0;
@@ -200,18 +164,14 @@
       }
 
       async function loadRuns() {
-        state.scheme = byId("scheme").value;
         state.credential = byId("token").value.trim();
-        byId("owner-tools").hidden = state.scheme !== "Bearer";
         if (!state.credential) { notice("Enter an access credential first."); return; }
         notice("Loading runs…");
         try {
-          const route = state.scheme === "Share" ? "/shared/runs" : "/runs";
-          const response = await request(route);
+          const response = await request("/runs");
           const data = await response.json();
           renderRuns(data.runs || []);
           notice(`${data.count || 0} run(s) available.`);
-          if (state.scheme === "Bearer") await loadShares();
         } catch (error) { notice(error.message); }
       }
 
@@ -224,8 +184,7 @@
       }
 
       function runRoute(id, suffix) {
-        const root = state.scheme === "Share" ? "/shared/runs" : "/runs";
-        return `${root}/${encodeURIComponent(id)}/${suffix}`;
+        return `/runs/${encodeURIComponent(id)}/${suffix}`;
       }
 
       function renderProfile(parent, value, label = "") {
@@ -257,8 +216,8 @@
         const ids = selectedIds();
         if (!ids.length) return;
         const definitions = {
-          prompts: { title: "System prompts", route: "context", field: "system_prompt", empty: "This prompt is not included in the uploaded run or review link." },
-          profiles: { title: "Student profiles", route: "context", field: "student_profile", empty: "This profile is not included in the uploaded run or review link." },
+          prompts: { title: "System prompts", route: "context", field: "system_prompt", empty: "No system prompt is available for this run." },
+          profiles: { title: "Student profiles", route: "context", field: "student_profile", empty: "No student profile is available for this run." },
           datasets: { title: "Full question sets", route: "dataset" },
         };
         const definition = definitions[kind];
@@ -389,8 +348,7 @@
         if (run_ids.length < 2 || run_ids.length > 4) return;
         notice("Comparing responses…");
         try {
-          const route = state.scheme === "Share" ? "/shared/comparisons" : "/comparisons";
-          const response = await request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_ids, offset: state.offset, limit: 10 }) });
+          const response = await request("/comparisons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_ids, offset: state.offset, limit: 10 }) });
           const data = await response.json();
           state.totalTests = data.total_tests || 0;
           const meta = byId("comparison-meta");
@@ -437,8 +395,7 @@
         const id = selectedIds()[0];
         if (!id) return;
         try {
-          const route = state.scheme === "Share" ? `/shared/runs/${encodeURIComponent(id)}/export?format=zip` : `/runs/${encodeURIComponent(id)}/export?format=zip`;
-          const response = await request(route);
+          const response = await request(`/runs/${encodeURIComponent(id)}/export?format=zip`);
           const blob = await response.blob();
           const anchor = document.createElement("a");
           anchor.href = URL.createObjectURL(blob);
@@ -448,110 +405,15 @@
         } catch (error) { notice(error.message); }
       }
 
-      async function createShare() {
-        const run_ids = selectedIds();
-        if (!run_ids.length || run_ids.length > 20) return;
-        try {
-          if (byId("include-prompt").checked || byId("include-profile").checked) {
-            for (const id of run_ids) {
-              const contextResponse = await request(runRoute(id, "context"));
-              const context = await contextResponse.json();
-              if (byId("include-prompt").checked && !context.system_prompt) {
-                throw new Error(`Run ${id} has no hosted system prompt. Re-upload it with --include-system-prompt first.`);
-              }
-              if (byId("include-profile").checked && !context.student_profile) {
-                throw new Error(`Run ${id} has no hosted student profile. Re-upload it with --include-profile first.`);
-              }
-            }
-          }
-          const response = await request("/shares", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              run_ids,
-              expires_in_hours: Number(byId("expiry").value || 168),
-              allow_system_prompt: byId("include-prompt").checked,
-              allow_profile: byId("include-profile").checked,
-            }),
-          });
-          const record = await response.json();
-          const link = `${location.origin}${location.pathname}#share=${encodeURIComponent(record.share_token)}`;
-          byId("share-link").textContent = `Copy this one-time link now: ${link}`;
-          await loadShares();
-        } catch (error) { notice(error.message); }
-      }
-
-      async function loadShares() {
-        try {
-          const response = await request("/shares");
-          const data = await response.json();
-          const root = byId("shares");
-          root.replaceChildren();
-          for (const share of data.shares || []) {
-            const row = document.createElement("p");
-            const detail = document.createElement("span");
-            detail.textContent = `${share.share_id} · ${share.run_ids.join(", ")} · expires ${share.expires_at ? new Date(share.expires_at * 1000).toLocaleString() : "never"} `;
-            const button = document.createElement("button");
-            button.className = "secondary";
-            button.textContent = "Revoke";
-            button.addEventListener("click", async () => {
-              try { await request(`/shares/${encodeURIComponent(share.share_id)}`, { method: "DELETE" }); await loadShares(); }
-              catch (error) { notice(error.message); }
-            });
-            row.append(detail, button);
-            root.append(row);
-          }
-        } catch (error) { notice(error.message); }
-      }
-
-      async function publishRuns() {
-        if (state.scheme !== "Bearer") return;
-        const files = [...byId("run-archives").files];
-        if (!files.length) { notice("Choose one or more run ZIP archives first."); return; }
-        for (const file of files) {
-          if (file.size > 4 * 1024 * 1024) { notice(`${file.name} is larger than the 4 MB limit.`); return; }
-        }
-        const button = byId("publish-runs");
-        button.disabled = true;
-        const outcomes = [];
-        try {
-          for (const file of files) {
-            notice(`Uploading ${file.name}…`);
-            const response = await request("/publish", {
-              method: "POST",
-              headers: { "Content-Type": "application/zip" },
-              body: file,
-            });
-            const result = await response.json();
-            outcomes.push(`${result.run_id} (${result.test_count} tests)`);
-          }
-          await loadRuns();
-          notice(`Published ${outcomes.length} run(s): ${outcomes.join(", ")}.`);
-        } catch (error) { notice(error.message); }
-        finally { button.disabled = false; }
-      }
-
       byId("connect").addEventListener("click", loadRuns);
       byId("compare").addEventListener("click", compare);
       byId("previous").addEventListener("click", () => { state.offset = Math.max(0, state.offset - 10); compare(); });
       byId("next").addEventListener("click", () => { state.offset += 10; compare(); });
       byId("download").addEventListener("click", downloadRun);
-      byId("create-share").addEventListener("click", createShare);
       byId("view-prompts").addEventListener("click", () => showContents("prompts"));
       byId("view-profiles").addEventListener("click", () => showContents("profiles"));
       byId("view-datasets").addEventListener("click", () => showContents("datasets"));
       byId("content-close").addEventListener("click", () => byId("content-dialog").close());
-      byId("publish-runs").addEventListener("click", publishRuns);
-      byId("scheme").addEventListener("change", () => {
-        byId("owner-tools").hidden = byId("scheme").value !== "Bearer";
-        updateButtons();
-      });
-
-      const fragment = new URLSearchParams(location.hash.slice(1));
-      if (fragment.has("share")) {
-        setMode("Share", fragment.get("share"));
-        loadRuns();
-      }
     })();
   </script>
 </body>
