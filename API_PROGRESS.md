@@ -267,4 +267,8 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
 - Added a bottom-right Go to top button once the reader scrolls down. It uses
   smooth scrolling and honors reduced-motion preferences.
 - JavaScript syntax validation, Python bytecode compilation, and
-  `git diff --check` passed. Deployment is pending.
+  `git diff --check` passed. Committed as `ca6d8fb` (`Add sticky comparison
+  navigation controls`).
+- Deployed to Production as `dpl_A5CyBqHJ4vM4gremwVe6yJBh1amL` and confirmed
+  the production page contains both sticky test buttons, the Go to top button,
+  and smooth-scroll behavior.
