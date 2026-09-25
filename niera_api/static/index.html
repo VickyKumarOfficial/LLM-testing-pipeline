@@ -24,17 +24,18 @@
     .case { margin: 18px 0; }
     .case h3 { margin: 0 0 8px; color: #183f68; }
     .case-question { margin: 0 0 14px; font-size: 1.05rem; }
-    .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
-    .answer { min-width: 0; border: 1px solid #dce2e8; border-radius: 8px; padding: 12px; background: #fbfcfd; }
-    .answer h4 { margin: 0 0 8px; overflow-wrap: anywhere; }
-    .answer-content { overflow-wrap: anywhere; line-height: 1.7; }
-    .answer-content p { margin: 0 0 10px; }
+    .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 12px; align-items: start; }
+    .answer { min-width: 0; border: 1px solid #dce2e8; border-radius: 8px; padding: 14px; background: #fbfcfd; }
+    .answer h4 { margin: 0 0 10px; overflow-wrap: anywhere; font-size: .98rem; color: #183f68; }
+    .answer-content { overflow-wrap: anywhere; line-height: 1.65; font-size: .98rem; }
+    .answer-content p { margin: 0 0 12px; }
     .answer-content p:last-child, .answer-content ul:last-child, .answer-content ol:last-child { margin-bottom: 0; }
     .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { margin: 14px 0 6px; }
     .answer-content h1 { font-size: 1.35rem; } .answer-content h2 { font-size: 1.2rem; } .answer-content h3 { font-size: 1.08rem; }
     .answer-content ul, .answer-content ol { padding-left: 24px; margin: 4px 0 10px; }
-    .answer-content code, .math-inline { background: #eef2f6; border-radius: 4px; padding: 1px 4px; font: .92em ui-monospace, monospace; }
-    .math-block { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f5f8; border-left: 3px solid #9aafc4; padding: 9px 12px; margin: 8px 0; font: .94em ui-monospace, monospace; }
+    .answer-content code { background: #eef2f6; border-radius: 4px; padding: 1px 4px; font: .92em ui-monospace, monospace; }
+    .math-inline { display: inline-block; border-radius: 4px; padding: 0 3px; font-family: Georgia, "Times New Roman", serif; font-size: 1.05em; }
+    .math-block { overflow-wrap: anywhere; text-align: center; background: #f2f5f8; border-radius: 6px; padding: 10px 12px; margin: 10px 0 14px; font: 1.08em Georgia, "Times New Roman", serif; }
     .comparison-progress { border-left: 4px solid #2876b9; background: #eaf3fb; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
     .comparison-progress strong { display: block; font-size: 1.08rem; }
     .comparison-progress p { margin: 4px 0 0; }
@@ -268,8 +269,25 @@
         }
       }
 
+      function mathToReadable(source) {
+        const superscripts = { "0":"⁰", "1":"¹", "2":"²", "3":"³", "4":"⁴", "5":"⁵", "6":"⁶", "7":"⁷", "8":"⁸", "9":"⁹", "+":"⁺", "-":"⁻", "=":"⁼", "(":"⁽", ")":"⁾", "n":"ⁿ", "i":"ⁱ" };
+        return String(source)
+          .replace(/\\boxed\s*\{([^{}]*)\}/g, "$1")
+          .replace(/\\(?:text|mathrm|operatorname)\s*\{([^{}]*)\}/g, "$1")
+          .replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)")
+          .replace(/\\sqrt\s*\{([^{}]*)\}/g, "√($1)")
+          .replace(/\\(?:left|right|displaystyle|quad|qquad)\b|\\[,;!]/g, "")
+          .replace(/\\times\b/g, "×").replace(/\\cdot\b/g, "·").replace(/\\div\b/g, "÷")
+          .replace(/\\pm\b/g, "±").replace(/\\leq?\b/g, "≤").replace(/\\geq?\b/g, "≥")
+          .replace(/\\neq\b|\\ne\b/g, "≠").replace(/\\approx\b/g, "≈").replace(/\\infty\b/g, "∞")
+          .replace(/\\pi\b/g, "π").replace(/\\theta\b/g, "θ").replace(/\\alpha\b/g, "α").replace(/\\beta\b/g, "β")
+          .replace(/\^\{([^{}]+)\}/g, (_, power) => [...power].map(char => superscripts[char] || char).join(""))
+          .replace(/\^([0-9n])/g, (_, power) => superscripts[power] || power)
+          .replace(/\\([A-Za-z]+)/g, "$1").replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
+      }
+
       function appendInline(parent, text) {
-        const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$)/g;
+        const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$|\\\([^\n]+?\\\))/g;
         let cursor = 0;
         for (const match of text.matchAll(pattern)) {
           if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index)));
@@ -283,6 +301,8 @@
             node = document.createElement("code"); node.textContent = token.slice(1, -1);
           } else {
             node = document.createElement("span"); node.className = "math-inline"; node.textContent = token.slice(1, -1);
+            if (token.startsWith("\\(")) node.textContent = mathToReadable(token.slice(2, -2));
+            else node.textContent = mathToReadable(token.slice(1, -1));
           }
           parent.append(node);
           cursor = match.index + token.length;
@@ -311,7 +331,7 @@
             while (++i < lines.length && !/^\s*\$\$\s*$/.test(lines[i])) equation.push(lines[i]);
             const block = document.createElement("div");
             block.className = "math-block";
-            block.textContent = equation.join("\n");
+            block.textContent = mathToReadable(equation.join(" "));
             parent.append(block);
             continue;
           }

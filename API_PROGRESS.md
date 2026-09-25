@@ -237,3 +237,13 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   requests return HTTP 401, so the owner API key remains required.
 - Deployment is complete. A separate viewer must use the owner API key; this
   direct-popup setup does not create an independent read-only access link.
+
+## Comparison answer formatting (2026-09-25)
+
+- Improved the side-by-side answer cards with clearer typography, spacing, and
+  responsive columns so long model outputs are easier to scan.
+- Replaced raw LaTeX source in inline and display math with readable Unicode
+  notation for common commands, powers, fractions, roots, and boxed answers.
+  The formatter stays browser-side and uses text nodes, with no new dependency.
+- JavaScript syntax validation and `git diff --check` passed. Changes are
+  local; the production page has not been redeployed.
