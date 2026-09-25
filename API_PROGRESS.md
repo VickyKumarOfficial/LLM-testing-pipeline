@@ -258,3 +258,13 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   (including the next-test preview) and added difficulty and exam-track tags
   beside each comparison test heading. Missing metadata is simply omitted.
 - Changes are local; the production page has not been redeployed.
+
+## Sticky comparison navigation (2026-09-25)
+
+- Added a fixed top navigation bar with duplicate Previous 10 tests and Next 10
+  tests controls. It appears after the original controls scroll out of view and
+  mirrors their enabled/disabled states.
+- Added a bottom-right Go to top button once the reader scrolls down. It uses
+  smooth scrolling and honors reduced-motion preferences.
+- JavaScript syntax validation, Python bytecode compilation, and
+  `git diff --check` passed. Deployment is pending.

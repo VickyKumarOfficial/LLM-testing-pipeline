@@ -65,6 +65,10 @@
     .content-empty { color: #687787; }
     hr { border: 0; border-top: 1px solid #dce2e8; margin: 22px 0; }
     #notice { min-height: 1.5em; color: #8b2e20; }
+    #test-navigation { scroll-margin-top: 76px; }
+    #sticky-test-navigation { position: fixed; z-index: 20; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; border: 1px solid #cbd5df; border-radius: 10px; background: rgb(255 255 255 / 96%); box-shadow: 0 4px 18px rgb(20 39 57 / 18%); }
+    #sticky-test-navigation[hidden], #go-to-top[hidden] { display: none; }
+    #go-to-top { position: fixed; z-index: 20; right: 22px; bottom: 22px; box-shadow: 0 4px 14px rgb(20 39 57 / 22%); }
     @media (max-width: 640px) { body { padding: 18px 12px 40px; } }
   </style>
 </head>
@@ -87,7 +91,7 @@
     <h2>Runs</h2>
     <p class="muted">Select two to four runs for an aligned comparison.</p>
     <div id="runs"></div>
-    <div class="row" style="margin-top:12px">
+    <div id="test-navigation" class="row" style="margin-top:12px">
       <button id="compare" disabled>Compare selected</button>
       <button id="previous" class="secondary" disabled>Previous 10 tests</button>
       <button id="next" class="secondary" disabled>Next 10 tests</button>
@@ -109,6 +113,12 @@
     </div>
     <div id="content-body"></div>
   </dialog>
+
+  <nav id="sticky-test-navigation" aria-label="Sticky test navigation" hidden>
+    <button id="sticky-previous" class="secondary" type="button">Previous 10 tests</button>
+    <button id="sticky-next" class="secondary" type="button">Next 10 tests</button>
+  </nav>
+  <button id="go-to-top" type="button" aria-label="Go to top" hidden>↑ Go to top</button>
 
   <section id="comparison">
     <h2>Comparison</h2>
@@ -166,6 +176,8 @@
         byId("view-datasets").disabled = ids.length === 0;
         byId("previous").disabled = state.offset <= 0;
         byId("next").disabled = state.offset + 10 >= state.totalTests;
+        byId("sticky-previous").disabled = byId("previous").disabled;
+        byId("sticky-next").disabled = byId("next").disabled;
       }
 
       async function loadRuns() {
@@ -435,10 +447,37 @@
         } catch (error) { notice(error.message); }
       }
 
+      function previousTests() {
+        state.offset = Math.max(0, state.offset - 10);
+        compare();
+      }
+
+      function nextTests() {
+        if (state.offset + 10 >= state.totalTests) return;
+        state.offset += 10;
+        compare();
+      }
+
+      const navObserver = new IntersectionObserver(([entry]) => {
+        byId("sticky-test-navigation").hidden = entry.isIntersecting || state.totalTests === 0;
+      });
+      navObserver.observe(byId("test-navigation"));
+
+      function updateScrollButtons() {
+        byId("go-to-top").hidden = window.scrollY < 450;
+      }
+
       byId("connect").addEventListener("click", loadRuns);
       byId("compare").addEventListener("click", compare);
-      byId("previous").addEventListener("click", () => { state.offset = Math.max(0, state.offset - 10); compare(); });
-      byId("next").addEventListener("click", () => { state.offset += 10; compare(); });
+      byId("previous").addEventListener("click", previousTests);
+      byId("next").addEventListener("click", nextTests);
+      byId("sticky-previous").addEventListener("click", previousTests);
+      byId("sticky-next").addEventListener("click", nextTests);
+      byId("go-to-top").addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      });
+      window.addEventListener("scroll", updateScrollButtons, { passive: true });
+      updateScrollButtons();
       byId("download").addEventListener("click", downloadRun);
       byId("view-prompts").addEventListener("click", () => showContents("prompts"));
       byId("view-profiles").addEventListener("click", () => showContents("profiles"));
