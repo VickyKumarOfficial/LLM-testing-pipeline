@@ -175,9 +175,12 @@ def compare_runs(run_ids: list[str], offset: int, limit: int) -> dict[str, Any]:
     for test_id in order:
         present = [result_maps[run_id].get(test_id) for run_id in run_ids]
         first = next((row for row in present if row is not None), None)
+        test_metadata = (first or {}).get("test") or {}
         aligned.append({
             "test_id": test_id,
-            "question": ((first or {}).get("test") or {}).get("question"),
+            "question": test_metadata.get("question"),
+            "track": test_metadata.get("track"),
+            "difficulty": test_metadata.get("difficulty"),
             "runs": [
                 None if row is None else {
                     "run_id": run_id,
@@ -204,6 +207,8 @@ def compare_runs(run_ids: list[str], offset: int, limit: int) -> dict[str, Any]:
             {
                 "test_id": aligned[offset + limit]["test_id"],
                 "question": aligned[offset + limit]["question"],
+                "track": aligned[offset + limit]["track"],
+                "difficulty": aligned[offset + limit]["difficulty"],
             }
             if offset + limit < len(aligned) else None
         ),

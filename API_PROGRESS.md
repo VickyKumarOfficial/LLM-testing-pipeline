@@ -247,3 +247,14 @@ This log tracks only the benchmark sharing API. Fine-tuning work is tracked in
   The formatter stays browser-side and uses text nodes, with no new dependency.
 - JavaScript syntax validation and `git diff --check` passed. Changes are
   local; the production page has not been redeployed.
+
+## Comparison question tags (2026-09-25)
+
+- The benchmark research notes define the legitimate set as NCERT (20), JEE
+  (15), and NEET (5), with a five-question difficulty pattern per subject:
+  one Fundamental, two Moderate, one Moderate-Hard, and one Hard. The verified
+  dataset stores each question's exact `track` and `difficulty` metadata.
+- Passed those two metadata fields through the aligned comparison response
+  (including the next-test preview) and added difficulty and exam-track tags
+  beside each comparison test heading. Missing metadata is simply omitted.
+- Changes are local; the production page has not been redeployed.
